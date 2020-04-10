@@ -9,16 +9,22 @@ const plot = () => {
       m['recorded_at'] = d3.timeParse('%s')(m['recorded_at'])
       return m
     })
+
+    const sensors = Array.from(data.reduce((acc, value) => {
+      acc.add(value.sensor)
+      return acc
+    }, new Set())).sort()
+
+    const sensor_arrays = sensors.map((sensor) => data.filter((m) => m.sensor === sensor))
     
     MG.data_graphic({
       title: "Measurements",
       description: "This is the description.",
-      data: data,
-      width: 600,
-      height: 200,
-      right: 40,
+      data: sensor_arrays,
+      width: 800,
+      height: 300,
       target: '#chart',
-      legend: ['Line 1','Line 2','Line 3'],
+      legend: sensors,
       legend_target: '.legend',
       x_accessor: 'recorded_at',
       y_accessor: 'temperature',
