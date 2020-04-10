@@ -4,7 +4,7 @@ const html = htm.bind(React.createElement)
 
 
 const plot = () => {
-  d3.json('measurement', function(data) {
+  d3.json('measurements', function(data) {
     data = data.map((m) => {
       m['recorded_at'] = d3.timeParse('%s')(m['recorded_at'])
       return m

@@ -9,7 +9,7 @@ from urllib.parse import urlparse, parse_qsl
 ALLOW_LIST = [
     'index.html',
     'spa.js',
-    'measurement'
+    'measurements'
 ]
 
 
@@ -38,7 +38,7 @@ class MeasurementHandler(SimpleHTTPRequestHandler):
         if path_suffix not in ALLOW_LIST:
             return self.send_error(403, message='Path not allowed', explain=None)
 
-        if parsed.path.endswith('measurement'):
+        if parsed.path.endswith('measurements'):
             self.send_header('Content-Type', 'application/json')
             self.wfile.write(
                 json.dumps(
