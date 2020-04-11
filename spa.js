@@ -31,7 +31,10 @@ const parseHash = (hash) => {
 
 
 const plot = (start, end, measurementType) => {
-  d3.json(`measurements?start=${start.getTime()}&end=${end.getTime()}&measurementType=${measurementType}`,
+  d3.json('measurements' +
+	  `?start=${Math.floor(start.getTime() / 1000)}` +
+	  `&end=${Math.floor(end.getTime() / 1000)}` +
+	  `&measurementType=${measurementType}`,
     function(data) {
       data = data.map((m) => {
 	m['recorded_at'] = d3.timeParse('%s')(m['recorded_at'])
@@ -78,7 +81,6 @@ const Chart = (props) => {
   useEffect(() => {
     plot(start, end, measurementType)
   }, [start, end, measurementType])
-  // }, [])
 
   return h('div', { id: 'chart' }, [])
 }

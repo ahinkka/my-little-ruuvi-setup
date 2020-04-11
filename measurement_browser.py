@@ -22,11 +22,15 @@ def dict_factory(cursor, row):
 
 
 def query(parameters):
+    pd =  dict(parameters)
     with contextlib.closing(
             sqlite3.connect('measurements.db',
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
         conn.row_factory = dict_factory
-        return list(conn.execute('SELECT * FROM measurement'))
+        return list(conn.execute(
+            'SELECT * FROM measurement WHERE recorded_at >= ? AND recorded_at < ?',
+            (int(pd['start']), int(pd['end']))
+        ))
 
 
 class MeasurementHandler(SimpleHTTPRequestHandler):
