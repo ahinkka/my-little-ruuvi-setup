@@ -1,4 +1,5 @@
-import { h, Component, render } from 'https://unpkg.com/preact?module';
+import { h, render } from 'https://unpkg.com/preact@latest?module';
+import { useState, useEffect } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
 
 
 const serializeHash = (contents) => {
@@ -59,7 +60,6 @@ const plot = () => {
 }
 
 
-
 const updateHash = (start, end, measurementType) => {
   const hash = serializeHash({ start, end, measurementType })
   if (hash != window.location.hash) {
@@ -69,6 +69,16 @@ const updateHash = (start, end, measurementType) => {
     }
     window.history.pushState(null, null, hashLess + hash)
   }
+}
+
+
+const Chart = (props) => {
+  useEffect(() => {
+    plot()
+  })
+  // }, [])
+
+  return h('div', { id: 'chart' }, [])
 }
 
 
@@ -83,20 +93,8 @@ const App = (props) => {
   const setStart = (v) => { updateHash(v, end, measurementType) }
   const setMeasurementType = (v) => { updateHash(start, end, v) }
 
-  return h(
-    'div', { start, end, measurementType }, "app"
-  )
+  return h('div', null, [h(Chart)])
 }
 
 
 window.onload = () => render(App(), document.getElementById('spa'))
-// window.onload = plot // () = plot()
-
-
-// const Foo = () => React.createElement('div', null, `FOO`);
-// const Bar = () => React.createElement('div', null, `BAR`);
-
-// window.onload = () => ReactDOM.render(
-//   [Foo(), Bar()],
-//   document.body
-// )
