@@ -1,6 +1,32 @@
-import { React, ReactDOM } from 'https://unpkg.com/es-react';
-import htm from 'https://unpkg.com/htm?module'
-const html = htm.bind(React.createElement)
+import { h, Component, render } from 'https://unpkg.com/preact?module';
+
+
+const serializeHash = (contents) => {
+  let keys = Object.keys(contents)
+  keys.sort()
+  let result = '#'
+  let first = true;
+  for (const key of keys) {
+    let value = contents[key]
+    if (first) {
+      result += `${key}=${value}`
+      first = false
+    } else {
+      result += `&${key}=${value}`
+    }
+  }
+  return result
+}
+
+const parseHash = (hash) => {
+  let parts = hash.slice(1).split('&')
+  let result = {}
+  for (let part of parts) {
+    let [key, value] = part.split('=')
+    result[key] = value
+  }
+  return result
+}
 
 
 const plot = () => {
@@ -32,7 +58,40 @@ const plot = () => {
   });
 }
 
-window.onload = plot // () = plot()
+
+
+const updateHash = (start, end, measurementType) => {
+  const hash = serializeHash({ start, end, measurementType })
+  if (hash != window.location.hash) {
+    let hashLess = window.location.href
+    if (window.location.href.includes('#')) {
+      hashLess = window.location.href.split('#')[0]
+    }
+    window.history.pushState(null, null, hashLess + hash)
+  }
+}
+
+
+const App = (props) => {
+  const parsedHash = parseHash(window.location.hash)
+  const end = parsedHash.end !== undefined ? new Date(parsedHash.end) : new Date()
+  const start = parsedHash.start !== undefined ?
+	new Date(parsedHash.start) : new Date(end.getTime() - 24 * 60 * 60 * 1000)
+  const measurementType = parsedHash.measurementType !== undefined ? parsedHash.measurementType : 'temperature'
+
+  const setEnd = (v) => { updateHash(start, v, measurementType) }
+  const setStart = (v) => { updateHash(v, end, measurementType) }
+  const setMeasurementType = (v) => { updateHash(start, end, v) }
+
+  return h(
+    'div', { start, end, measurementType }, "app"
+  )
+}
+
+
+window.onload = () => render(App(), document.getElementById('spa'))
+// window.onload = plot // () = plot()
+
 
 // const Foo = () => React.createElement('div', null, `FOO`);
 // const Bar = () => React.createElement('div', null, `BAR`);
