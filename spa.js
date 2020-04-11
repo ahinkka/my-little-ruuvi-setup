@@ -48,17 +48,34 @@ const plot = (start, end, measurementType) => {
 
       const sensorArrays = sensors.map((sensor) => data.filter((m) => m.sensor === sensor))
 
+      let yax_unit
+      if (measurementType == 'temperature') {
+	yax_unit = '°C'
+      } else if (measurementType == 'humidity') {
+	yax_unit = '%'
+      } else if (measurementType == 'pressure') {
+	yax_unit = 'P'
+      } else if (measurementType == 'battery_voltage') {
+	yax_unit = 'V'
+      } else if (measurementType == 'tx_power') {
+	yax_unit = 'dBm'
+      }
+
+      const viewportWidth = (window.innerWidth > 0) ? window.innerWidth : screen.width
       MG.data_graphic({
-	title: "Measurements",
-	description: "This is the description.",
 	data: sensorArrays,
-	width: 800,
-	height: 300,
+	width: Math.min(1150, viewportWidth),
+	height: 400,
 	target: '#chart',
 	legend: sensors,
 	legend_target: '.legend',
 	x_accessor: 'recorded_at',
 	y_accessor: measurementType,
+	aggregate_rollover: true,
+	brush: 'x',
+	min_y_from_data: true,
+	yax_units: yax_unit,
+	yax_units_append: true
       });
     });
 }
@@ -83,19 +100,42 @@ const QuickChooser = (props) => {
 }
 
 
+const MeasurementTypeDropdown = (props) => {
+  const { measurementTypeCallback, measurementType } = props
+  // return h('ul', {
+  //   onClick: () => timeCallback(new Date(new Date() - periodMs), new Date())
+  // }, presentedPeriod)
+
+  return h('select', { onChange: (e) => {
+    const select = e.target
+    measurementTypeCallback(select.children[select.selectedIndex].value)
+  }}, [
+    h('option', { value: 'temperature', selected: measurementType == 'temperature' }, 'Temperature'),
+    h('option', { value: 'humidity', selected: measurementType == 'humidity' }, 'Humidity'),
+    h('option', { value: 'pressure', selected: measurementType == 'pressure' }, 'Pressure'),
+    h('option', { value: 'battery_voltage', selected: measurementType == 'battery_voltage' }, 'Battery voltage'),
+    h('option', { value: 'tx_power', selected: measurementType == 'tx_power' }, 'TX Power'),
+  ])
+}
+
+
 const Header = (props) => {
-  const { timeCallback } = props
+  const { timeCallback, measurementType, measurementTypeCallback } = props
   const millisInHour = 60 * 60 * 1000
-  return h('div', null, [
-	h(QuickChooser, { timeCallback, periodMs: 1 * millisInHour, presentedPeriod: '1h' }),
-	h(QuickChooser, { timeCallback, periodMs: 3 * millisInHour, presentedPeriod: '3h' }),
-	h(QuickChooser, { timeCallback, periodMs: 6 * millisInHour, presentedPeriod: '6h' }),
-	h(QuickChooser, { timeCallback, periodMs: 12 * millisInHour, presentedPeriod: '12h' }),
-	h(QuickChooser, { timeCallback, periodMs: 24 * millisInHour, presentedPeriod: '24h' }),
-	h(QuickChooser, { timeCallback, periodMs: 2 * 24 * millisInHour, presentedPeriod: '2d' }),
-	h(QuickChooser, { timeCallback, periodMs: 3 * 24 * millisInHour, presentedPeriod: '3d' }),
-	h(QuickChooser, { timeCallback, periodMs: 7 * 24 * millisInHour, presentedPeriod: '7d' }),
-      ])
+  return h('div', { className: 'row', style: { marginTop: '25px' }}, [
+    h('h3', { className: 'col col-lg-4' }, 'Measurement browser'),
+    h('div', { className: 'col align-middle' },
+      [h('div', { className: 'float-right'}, 'Show last')]),
+    h(QuickChooser, { timeCallback, periodMs: 1 * millisInHour, presentedPeriod: '1h' }),
+    h(QuickChooser, { timeCallback, periodMs: 3 * millisInHour, presentedPeriod: '3h' }),
+    h(QuickChooser, { timeCallback, periodMs: 6 * millisInHour, presentedPeriod: '6h' }),
+    h(QuickChooser, { timeCallback, periodMs: 12 * millisInHour, presentedPeriod: '12h' }),
+    h(QuickChooser, { timeCallback, periodMs: 24 * millisInHour, presentedPeriod: '24h' }),
+    h(QuickChooser, { timeCallback, periodMs: 2 * 24 * millisInHour, presentedPeriod: '2d' }),
+    h(QuickChooser, { timeCallback, periodMs: 3 * 24 * millisInHour, presentedPeriod: '3d' }),
+    h(QuickChooser, { timeCallback, periodMs: 7 * 24 * millisInHour, presentedPeriod: '7d' }),
+    h(MeasurementTypeDropdown, { measurementType, measurementTypeCallback })
+  ])
 }
 
 
@@ -125,7 +165,10 @@ const App = (props) => {
   }, [start, end, measurementType])
   
   return h('div', null, [
-    h(Header, { timeCallback: (start, end) => {
+    h(Header, {
+      measurementType,
+      measurementTypeCallback: setMeasurementType,
+      timeCallback: (start, end) => {
       setStart(start)
       setEnd(end)
     }}),
