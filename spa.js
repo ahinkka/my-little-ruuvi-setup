@@ -30,33 +30,34 @@ const parseHash = (hash) => {
 }
 
 
-const plot = () => {
-  d3.json('measurements', function(data) {
-    data = data.map((m) => {
-      m['recorded_at'] = d3.timeParse('%s')(m['recorded_at'])
-      return m
-    })
+const plot = (start, end, measurementType) => {
+  d3.json(`measurements?start=${start.getTime()}&end=${end.getTime()}&measurementType=${measurementType}`,
+    function(data) {
+      data = data.map((m) => {
+	m['recorded_at'] = d3.timeParse('%s')(m['recorded_at'])
+	return m
+      })
 
-    const sensors = Array.from(data.reduce((acc, value) => {
-      acc.add(value.sensor)
-      return acc
-    }, new Set())).sort()
+      const sensors = Array.from(data.reduce((acc, value) => {
+	acc.add(value.sensor)
+	return acc
+      }, new Set())).sort()
 
-    const sensorArrays = sensors.map((sensor) => data.filter((m) => m.sensor === sensor))
-    
-    MG.data_graphic({
-      title: "Measurements",
-      description: "This is the description.",
-      data: sensorArrays,
-      width: 800,
-      height: 300,
-      target: '#chart',
-      legend: sensors,
-      legend_target: '.legend',
-      x_accessor: 'recorded_at',
-      y_accessor: 'temperature',
+      const sensorArrays = sensors.map((sensor) => data.filter((m) => m.sensor === sensor))
+
+      MG.data_graphic({
+	title: "Measurements",
+	description: "This is the description.",
+	data: sensorArrays,
+	width: 800,
+	height: 300,
+	target: '#chart',
+	legend: sensors,
+	legend_target: '.legend',
+	x_accessor: 'recorded_at',
+	y_accessor: measurementType,
+      });
     });
-  });
 }
 
 
@@ -73,9 +74,10 @@ const updateHash = (start, end, measurementType) => {
 
 
 const Chart = (props) => {
+  const { start, end, measurementType } = props
   useEffect(() => {
-    plot()
-  })
+    plot(start, end, measurementType)
+  }, [start, end, measurementType])
   // }, [])
 
   return h('div', { id: 'chart' }, [])
@@ -84,17 +86,21 @@ const Chart = (props) => {
 
 const App = (props) => {
   const parsedHash = parseHash(window.location.hash)
-  const end = parsedHash.end !== undefined ? new Date(parsedHash.end) : new Date()
-  const start = parsedHash.start !== undefined ?
-	new Date(parsedHash.start) : new Date(end.getTime() - 24 * 60 * 60 * 1000)
-  const measurementType = parsedHash.measurementType !== undefined ? parsedHash.measurementType : 'temperature'
+  const [end, setEnd] = useState(parsedHash.end != undefined ? new Date(parseInt(parsedHash.end)) : new Date())
+  const [start, setStart] = useState(
+    parsedHash.start !== undefined ?
+      new Date(parseInt(parsedHash.start)) : new Date(end.getTime() - 24 * 60 * 60 * 1000))
+  const [measurementType, setMeasurementType] = useState(
+    parsedHash.measurementType !== undefined ? parsedHash.measurementType : 'temperature')
 
-  const setEnd = (v) => { updateHash(start, v, measurementType) }
-  const setStart = (v) => { updateHash(v, end, measurementType) }
-  const setMeasurementType = (v) => { updateHash(start, end, v) }
-
-  return h('div', null, [h(Chart)])
+  useEffect(() => {
+    if (start && end && measurementType) {
+      updateHash(start.getTime(), end.getTime(), measurementType)
+    }
+  }, [start, end, measurementType])
+  
+  return h('div', null, [h(Chart, { start, end, measurementType })])
 }
 
 
-window.onload = () => render(App(), document.getElementById('spa'))
+window.onload = () => render(h(App), document.getElementById('spa'))
