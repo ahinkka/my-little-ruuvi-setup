@@ -42,12 +42,12 @@ const plot = () => {
       return acc
     }, new Set())).sort()
 
-    const sensor_arrays = sensors.map((sensor) => data.filter((m) => m.sensor === sensor))
+    const sensorArrays = sensors.map((sensor) => data.filter((m) => m.sensor === sensor))
     
     MG.data_graphic({
       title: "Measurements",
       description: "This is the description.",
-      data: sensor_arrays,
+      data: sensorArrays,
       width: 800,
       height: 300,
       target: '#chart',
