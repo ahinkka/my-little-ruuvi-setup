@@ -31,11 +31,12 @@ const parseHash = (hash) => {
 
 
 const plot = (start, end, measurementType) => {
-  d3.json('measurements' +
-	  `?start=${Math.floor(start.getTime() / 1000)}` +
-	  `&end=${Math.floor(end.getTime() / 1000)}` +
-	  `&measurementType=${measurementType}`,
-    function(data) {
+  fetch('measurements' +
+	`?start=${Math.floor(start.getTime() / 1000)}` +
+	`&end=${Math.floor(end.getTime() / 1000)}` +
+	`&measurementType=${measurementType}`)
+    .then((response) => response.json())
+    .then((data) => {
       data = data.map((m) => {
 	m['recorded_at'] = d3.timeParse('%s')(m['recorded_at'])
 
@@ -86,8 +87,8 @@ const plot = (start, end, measurementType) => {
 	min_y: measurementType == 'pressure' ? 950 : undefined,
 	max_y: measurementType == 'pressure' ? 1050 : undefined,
 	baselines: measurementType == 'pressure' ? [{value: 1013.25, label: 'atm'}] : undefined,
-      });
-    });
+      })
+    })
 }
 
 

@@ -42,6 +42,8 @@ def query(parameters):
 
 class MeasurementHandler(SimpleHTTPRequestHandler):
     def do_GET(self, *args, **kwargs):
+        self.close_connection = True
+
         eff_path = self.path.replace('..', '')
         parsed = urlparse(eff_path)
 
@@ -50,14 +52,12 @@ class MeasurementHandler(SimpleHTTPRequestHandler):
             return self.send_error(403, message='Path not allowed', explain=None)
 
         if parsed.path.endswith('measurements'):
+            output = json.dumps(query(parse_qsl(parsed.query)), ensure_ascii=False).encode('utf-8')
+            self.send_response(200)
             self.send_header('Content-Type', 'application/json')
-            self.wfile.write(
-                json.dumps(
-                    query(parse_qsl(parsed.query)),
-                    ensure_ascii=False,
-                    # indent=4,
-                    # sort_keys=True
-                ).encode('utf-8'))
+            self.send_header('Content-Length', len(output))
+            self.end_headers()
+            self.wfile.write(output)
             return
 
         return super().do_GET(*args, **kwargs)
