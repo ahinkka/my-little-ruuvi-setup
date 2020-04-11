@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import contextlib
 import json
+import re
 import sqlite3
 
 from http.server import *
@@ -21,14 +22,20 @@ def dict_factory(cursor, row):
     return d
 
 
+measurement_type_matcher = re.compile(r'[a-z_]{1,20}')
+# https://www.sqlite.org/windowfunctions.html
 def query(parameters):
     pd =  dict(parameters)
+
+    measurement_type = measurement_type_matcher.match(pd['measurementType']).group(0)
     with contextlib.closing(
             sqlite3.connect('measurements.db',
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
         conn.row_factory = dict_factory
         return list(conn.execute(
-            'SELECT * FROM measurement WHERE recorded_at >= ? AND recorded_at < ?',
+            'SELECT recorded_at, sensor, ' +
+            measurement_type +
+            ' FROM measurement WHERE recorded_at >= ? AND recorded_at < ?',
             (int(pd['start']), int(pd['end']))
         ))
 
@@ -48,8 +55,8 @@ class MeasurementHandler(SimpleHTTPRequestHandler):
                 json.dumps(
                     query(parse_qsl(parsed.query)),
                     ensure_ascii=False,
-                    indent=4,
-                    sort_keys=True
+                    # indent=4,
+                    # sort_keys=True
                 ).encode('utf-8'))
             return
 
