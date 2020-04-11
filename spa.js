@@ -75,6 +75,29 @@ const updateHash = (start, end, measurementType) => {
   }
 }
 
+const QuickChooser = (props) => {
+  const { timeCallback, periodMs, presentedPeriod } = props
+  return h('button', {
+    onClick: () => timeCallback(new Date(new Date() - periodMs), new Date())
+  }, presentedPeriod)
+}
+
+
+const Header = (props) => {
+  const { timeCallback } = props
+  const millisInHour = 60 * 60 * 1000
+  return h('div', null, [
+	h(QuickChooser, { timeCallback, periodMs: 1 * millisInHour, presentedPeriod: '1h' }),
+	h(QuickChooser, { timeCallback, periodMs: 3 * millisInHour, presentedPeriod: '3h' }),
+	h(QuickChooser, { timeCallback, periodMs: 6 * millisInHour, presentedPeriod: '6h' }),
+	h(QuickChooser, { timeCallback, periodMs: 12 * millisInHour, presentedPeriod: '12h' }),
+	h(QuickChooser, { timeCallback, periodMs: 24 * millisInHour, presentedPeriod: '24h' }),
+	h(QuickChooser, { timeCallback, periodMs: 2 * 24 * millisInHour, presentedPeriod: '2d' }),
+	h(QuickChooser, { timeCallback, periodMs: 3 * 24 * millisInHour, presentedPeriod: '3d' }),
+	h(QuickChooser, { timeCallback, periodMs: 7 * 24 * millisInHour, presentedPeriod: '7d' }),
+      ])
+}
+
 
 const Chart = (props) => {
   const { start, end, measurementType } = props
@@ -101,7 +124,13 @@ const App = (props) => {
     }
   }, [start, end, measurementType])
   
-  return h('div', null, [h(Chart, { start, end, measurementType })])
+  return h('div', null, [
+    h(Header, { timeCallback: (start, end) => {
+      setStart(start)
+      setEnd(end)
+    }}),
+    h(Chart, { start, end, measurementType }),
+  ])
 }
 
 
