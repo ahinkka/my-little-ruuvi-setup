@@ -38,6 +38,11 @@ const plot = (start, end, measurementType) => {
     function(data) {
       data = data.map((m) => {
 	m['recorded_at'] = d3.timeParse('%s')(m['recorded_at'])
+
+	if (measurementType == 'pressure') {
+	  m['pressure'] = m['pressure'] / 100
+	}
+
 	return m
       })
 
@@ -54,18 +59,20 @@ const plot = (start, end, measurementType) => {
       } else if (measurementType == 'humidity') {
 	yax_unit = '%'
       } else if (measurementType == 'pressure') {
-	yax_unit = 'P'
+	yax_unit = 'hPa'
       } else if (measurementType == 'battery_voltage') {
 	yax_unit = 'V'
       } else if (measurementType == 'tx_power') {
 	yax_unit = 'dBm'
       }
 
-      const viewportWidth = (window.innerWidth > 0) ? window.innerWidth : screen.width
+      const viewportWidth = ((window.innerWidth > 0) ? window.innerWidth : screen.width) - 50
+      const effWidth = Math.min(1150, viewportWidth)
       MG.data_graphic({
 	data: sensorArrays,
-	width: Math.min(1150, viewportWidth),
-	height: 400,
+	left: 65,
+	width: effWidth,
+	height: Math.floor(effWidth * 0.60),
 	target: '#chart',
 	legend: sensors,
 	legend_target: '.legend',
@@ -75,7 +82,10 @@ const plot = (start, end, measurementType) => {
 	brush: 'x',
 	min_y_from_data: true,
 	yax_units: yax_unit,
-	yax_units_append: true
+	yax_units_append: true,
+	min_y: measurementType == 'pressure' ? 950 : undefined,
+	max_y: measurementType == 'pressure' ? 1050 : undefined,
+	baselines: measurementType == 'pressure' ? [{value: 1013.25, label: 'atm'}] : undefined,
       });
     });
 }
@@ -102,9 +112,6 @@ const QuickChooser = (props) => {
 
 const MeasurementTypeDropdown = (props) => {
   const { measurementTypeCallback, measurementType } = props
-  // return h('ul', {
-  //   onClick: () => timeCallback(new Date(new Date() - periodMs), new Date())
-  // }, presentedPeriod)
 
   return h('select', { onChange: (e) => {
     const select = e.target
@@ -122,19 +129,19 @@ const MeasurementTypeDropdown = (props) => {
 const Header = (props) => {
   const { timeCallback, measurementType, measurementTypeCallback } = props
   const millisInHour = 60 * 60 * 1000
-  return h('div', { className: 'row', style: { marginTop: '25px' }}, [
+  return h('div', { className: 'row row-eq-height', style: { marginTop: '25px' }}, [
     h('h3', { className: 'col col-lg-4' }, 'Measurement browser'),
-    h('div', { className: 'col align-middle' },
+    h('div', { className: 'col align-middle', style: { lineHeight: 2.5 } },
       [h('div', { className: 'float-right'}, 'Show last')]),
-    h(QuickChooser, { timeCallback, periodMs: 1 * millisInHour, presentedPeriod: '1h' }),
-    h(QuickChooser, { timeCallback, periodMs: 3 * millisInHour, presentedPeriod: '3h' }),
-    h(QuickChooser, { timeCallback, periodMs: 6 * millisInHour, presentedPeriod: '6h' }),
-    h(QuickChooser, { timeCallback, periodMs: 12 * millisInHour, presentedPeriod: '12h' }),
-    h(QuickChooser, { timeCallback, periodMs: 24 * millisInHour, presentedPeriod: '24h' }),
-    h(QuickChooser, { timeCallback, periodMs: 2 * 24 * millisInHour, presentedPeriod: '2d' }),
-    h(QuickChooser, { timeCallback, periodMs: 3 * 24 * millisInHour, presentedPeriod: '3d' }),
-    h(QuickChooser, { timeCallback, periodMs: 7 * 24 * millisInHour, presentedPeriod: '7d' }),
-    h(MeasurementTypeDropdown, { measurementType, measurementTypeCallback })
+    h(QuickChooser, { className: 'col', timeCallback, periodMs: 1 * millisInHour, presentedPeriod: '1h' }),
+    h(QuickChooser, { className: 'col', timeCallback, periodMs: 3 * millisInHour, presentedPeriod: '3h' }),
+    h(QuickChooser, { className: 'col', timeCallback, periodMs: 6 * millisInHour, presentedPeriod: '6h' }),
+    h(QuickChooser, { className: 'col', timeCallback, periodMs: 12 * millisInHour, presentedPeriod: '12h' }),
+    h(QuickChooser, { className: 'col', timeCallback, periodMs: 24 * millisInHour, presentedPeriod: '24h' }),
+    h(QuickChooser, { className: 'col', timeCallback, periodMs: 2 * 24 * millisInHour, presentedPeriod: '2d' }),
+    h(QuickChooser, { className: 'col', timeCallback, periodMs: 3 * 24 * millisInHour, presentedPeriod: '3d' }),
+    h(QuickChooser, { className: 'col', timeCallback, periodMs: 7 * 24 * millisInHour, presentedPeriod: '7d' }),
+    h(MeasurementTypeDropdown, { className: 'col', measurementType, measurementTypeCallback })
   ])
 }
 
