@@ -144,7 +144,7 @@ const Header = (props) => {
   const { period, periodCallback, measurementType, measurementTypeCallback } = props
   const millisInHour = 60 * 60 * 1000
   return h('div', { className: 'row row-eq-height', style: { marginTop: '25px' }}, [
-    h('h3', { className: 'col col-lg-4' }, 'Measurement browser'),
+    h('h3', { className: 'col col-4' }, 'Measurement browser'),
     h('div', { className: 'col align-middle', style: { lineHeight: 2.5 } },
       [h('div', { className: 'float-right'}, 'Show last')]),
     h(QuickChooser, { className: 'col', periodCallback, period: '1h' }),
@@ -166,10 +166,9 @@ const Chart = (props) => {
     plot((() => document.getElementById('chart'))(), start, end, measurementType)
   }, [start, end, measurementType])
 
-  return h('div', { id: 'chart', style: {
-    position: 'absolute',
-    inset: '150px 150px 150px 150px'
-  }}, [])
+  return h('div', { className: 'row', style: { marginTop: '20px', marginRight: '10px' }}, [
+    h('div', { className: 'col-12', id: 'chart' })
+  ]);
 }
 
 
@@ -215,6 +214,5 @@ const App = (props) => {
     h(Chart, { start: new Date(now - periodToMillis(period)), end: now, measurementType }),
   ])
 }
-
 
 window.onload = () => render(h(App), document.getElementById('spa'))
