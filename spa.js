@@ -32,12 +32,40 @@ const parseHash = (hash) => {
 
 
 const plot = (element, start, end, measurementType) => {
+  const startEpoch = Math.floor(start.getTime() / 1000)
+  const endEpoch = Math.floor(end.getTime() / 1000)
   fetch('measurements.tsv' +
-	`?start=${Math.floor(start.getTime() / 1000)}` +
-	`&end=${Math.floor(end.getTime() / 1000)}` +
+	`?start=${startEpoch}` +
+	`&end=${endEpoch}` +
 	`&measurementType=${measurementType}`)
     .then((response) => response.text())
     .then((data) => {
+      const periodSecs = endEpoch - startEpoch
+      let rollPeriod = 1
+      if (periodSecs > 60 * 60) {
+	rollPeriod = 5
+      } else if (periodSecs > 6 * 60 * 60) {
+	rollPeriod = 15
+      } else if (periodSecs > 12 * 60 * 60) {
+	rollPeriod = 30
+      }
+
+      let yLabel
+      if (measurementType == 'temperature') {
+        yLabel = '°C'
+      } else if (measurementType == 'humidity') {
+        yLabel = '%'
+      } else if (measurementType == 'pressure') {
+        yLabel = 'P'
+        // yLabel = 'hPa'
+        // yValueParser: measurementType == 'pressure' ? (v) => parseFloat(v) / 100 : undefined,
+        // baselines: measurementType == 'pressure' ? [{value: 1013.25, label: 'atm'}] : undefined,
+      } else if (measurementType == 'battery_voltage') {
+        yLabel = 'V'
+      } else if (measurementType == 'tx_power') {
+        yLabel = 'dBm'
+      }
+
       const g = new Dygraph(
 	element,
 	data,
@@ -54,49 +82,11 @@ const plot = (element, start, end, measurementType) => {
           },
 
           legend: 'always',
-          animatedZooms: true
+          animatedZooms: true,
+          rollPeriod: rollPeriod,
+          ylabel: yLabel
         }
       )
-
-      // data = data.map((m) => {
-      // 	m['recorded_at'] = d3.timeParse('%s')(m['recorded_at'])
-
-      // 	if (measurementType == 'pressure') {
-      // 	  m['pressure'] = m['pressure'] / 100
-      // 	}
-
-      // 	return m
-      // })
-
-      // let yax_unit
-      // if (measurementType == 'temperature') {
-      // 	yax_unit = '°C'
-      // } else if (measurementType == 'humidity') {
-      // 	yax_unit = '%'
-      // } else if (measurementType == 'pressure') {
-      // 	yax_unit = 'hPa'
-      // } else if (measurementType == 'battery_voltage') {
-      // 	yax_unit = 'V'
-      // } else if (measurementType == 'tx_power') {
-      // 	yax_unit = 'dBm'
-      // }
-
-      // MG.data_graphic({
-      // 	data: sensorArrays,
-      // 	left: 65,
-      // 	legend: sensors,
-      // 	legend_target: '.legend',
-      // 	x_accessor: 'recorded_at',
-      // 	y_accessor: measurementType,
-      // 	aggregate_rollover: true,
-      // 	brush: 'x',
-      // 	min_y_from_data: true,
-      // 	yax_units: yax_unit,
-      // 	yax_units_append: true,
-      // 	min_y: measurementType == 'pressure' ? 950 : undefined,
-      // 	max_y: measurementType == 'pressure' ? 1050 : undefined,
-      // 	baselines: measurementType == 'pressure' ? [{value: 1013.25, label: 'atm'}] : undefined,
-      // })
     })
 }
 
@@ -176,11 +166,10 @@ const Chart = (props) => {
     plot((() => document.getElementById('chart'))(), start, end, measurementType)
   }, [start, end, measurementType])
 
-  const viewportWidth = ((window.innerWidth > 0) ? window.innerWidth : screen.width) - 50
-  const effWidth = Math.min(1150, viewportWidth)
-  const height = Math.floor(effWidth * 0.60)
-
-  return h('div', { id: 'chart', style: { marginTop: '20px', width: effWidth, height: height }}, [])
+  return h('div', { id: 'chart', style: {
+    position: 'absolute',
+    inset: '150px 150px 150px 150px'
+  }}, [])
 }
 
 
