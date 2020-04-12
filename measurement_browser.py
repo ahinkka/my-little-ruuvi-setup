@@ -10,7 +10,7 @@ from urllib.parse import urlparse, parse_qsl
 ALLOW_LIST = [
     'index.html',
     'spa.js',
-    'measurements'
+    'measurements.tsv'
 ]
 
 
@@ -22,57 +22,78 @@ def dict_factory(cursor, row):
     return d
 
 
+col_template = '{sensor_alias}.{measurement_type}'
+
+
+join_template = '''
+LEFT JOIN quantified_values AS {sensor_alias} ON
+    {sensor_alias}.sensor = '{sensor_id}'
+  AND
+    {sensor_alias}.recorded_at = quantified_values.recorded_at
+'''
+
 query_template = '''
 WITH
-  rounded_with_duplicates AS (
-    SELECT
-      CAST((recorded_at / {selection_coef}) AS INTEGER) * {selection_coef} AS rounded_recorded_at,
-      sensor,
-      rowid
+  quantified_values AS (
+    SELECT CAST((recorded_at / 60) AS INTEGER) * 60 AS recorded_at, sensor, {measurement_type}
     FROM measurement
-    WHERE
-      recorded_at >= ?
-    AND
-      recorded_at < ?
-  ),
-  unique_rowids AS (SELECT DISTINCT rowid FROM rounded_with_duplicates GROUP BY rounded_recorded_at, sensor)
+    WHERE recorded_at >= ? AND recorded_at < ?
+    GROUP BY CAST((recorded_at / 60) AS INTEGER) * 60, sensor
+  )
 
-SELECT
-  recorded_at,
-  CAST((recorded_at / {rounding_coef}) AS INTEGER) * {rounding_coef} AS recorded_at,
-  sensor,
-  {measurement_type}
-FROM measurement
-WHERE
-  rowid IN (SELECT * FROM unique_rowids)
+SELECT DISTINCT
+  quantified_values.recorded_at,
+  {cols}
+
+FROM quantified_values
+
+{joins}
 '''
 
 
+def create_sql(measurement_type, sensors):
+    return query_template.format(
+        measurement_type=measurement_type,
+        cols=',\n  '.join(
+            col_template.format(
+                sensor_alias='s' + str(idx),
+                measurement_type=measurement_type,
+            )
+            for idx, sensor in enumerate(sensors)
+        ),
+        joins=''.join(
+            join_template.format(
+                sensor_alias='s' + str(idx),
+                sensor_id=sensor
+            )
+            for idx, sensor in enumerate(sensors)
+        )
+    )
+
+
+def stringify(v):
+    if v is None:
+        return 'NaN'
+    else:
+        return str(v)
+
+
 measurement_type_matcher = re.compile(r'[a-z_]{1,20}')
-# https://www.sqlite.org/windowfunctions.html
-def query(parameters):
+def tsv_query(parameters, file):
     pd =  dict(parameters)
-
     start, end = int(pd['start']), int(pd['end'])
-    coef = 1
-    if end - start > 50 * 60:
-        coef = 10
-    elif end - start > 11 * 60 * 60:
-        coef = 100
-    elif end - start > 23 * 60 * 60:
-        coef = 1000
-    elif end - start > 47 * 60 * 60:
-        coef = 10000
-
     measurement_type = measurement_type_matcher.match(pd['measurementType']).group(0)
+
     with contextlib.closing(
             sqlite3.connect('measurements.db',
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
-        conn.row_factory = dict_factory
-        return list(conn.execute(
-            query_template.format(rounding_coef=coef, selection_coef=coef, measurement_type=measurement_type),
-            (start, end)
-        ))
+        sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement')))
+        header = '\t'.join(['Date'] + sensors).encode('utf-8')
+        file.write(header)
+        file.write('\n'.encode('utf-8'))
+        for row in conn.execute(create_sql(measurement_type, sensors), (start, end)):
+            file.write('\t'.join(stringify(c) for c in row).encode('utf-8'))
+            file.write('\n'.encode('utf-8'))
 
 
 class MeasurementHandler(SimpleHTTPRequestHandler):
@@ -86,13 +107,11 @@ class MeasurementHandler(SimpleHTTPRequestHandler):
         if path_suffix not in ALLOW_LIST:
             return self.send_error(403, message='Path not allowed', explain=None)
 
-        if parsed.path.endswith('measurements'):
-            output = json.dumps(query(parse_qsl(parsed.query)), ensure_ascii=False).encode('utf-8')
+        if parsed.path.endswith('measurements.tsv'):
             self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Content-Length', len(output))
+            self.send_header('Content-Type', 'text/tab-separated-values')
             self.end_headers()
-            self.wfile.write(output)
+            tsv_query(parse_qsl(parsed.query), self.wfile)
             return
 
         return super().do_GET(*args, **kwargs)
