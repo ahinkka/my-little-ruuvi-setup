@@ -31,7 +31,7 @@ const parseHash = (hash) => {
 }
 
 
-const plot = (element, start, end, measurementType) => {
+const plot = (element, start, end, measurementType, height) => {
   const startEpoch = Math.floor(start.getTime() / 1000)
   const endEpoch = Math.floor(end.getTime() / 1000)
   fetch('measurements.tsv' +
@@ -84,7 +84,8 @@ const plot = (element, start, end, measurementType) => {
           legend: 'always',
           animatedZooms: true,
           rollPeriod: rollPeriod,
-          ylabel: yLabel
+          ylabel: yLabel,
+          height: height
         }
       )
     })
@@ -161,12 +162,15 @@ const Header = (props) => {
 
 
 const Chart = (props) => {
-  const { start, end, measurementType } = props
+  const { start, end, measurementType, innerHeight } = props
   useEffect(() => {
-    plot((() => document.getElementById('chart'))(), start, end, measurementType)
+    plot((() => document.getElementById('chart'))(), start, end, measurementType, innerHeight - 200)
   }, [start, end, measurementType])
 
-  return h('div', { className: 'row', style: { marginTop: '20px', marginRight: '10px' }}, [
+  return h('div', { className: 'row', style: {
+    marginTop: '20px',
+    marginRight: '10px',
+  }}, [
     h('div', { className: 'col-12', id: 'chart' })
   ]);
 }
@@ -211,8 +215,14 @@ const App = (props) => {
 	setPeriod(period)
       }
     }),
-    h(Chart, { start: new Date(now - periodToMillis(period)), end: now, measurementType }),
+    h(Chart, {
+      start: new Date(now - periodToMillis(period)),
+      end: now,
+      measurementType,
+      innerHeight: window.innerHeight
+    }),
   ])
 }
 
 window.onload = () => render(h(App), document.getElementById('spa'))
+window.onresize = () => render(h(App), document.getElementById('spa'))
