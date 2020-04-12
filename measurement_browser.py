@@ -22,10 +22,47 @@ def dict_factory(cursor, row):
     return d
 
 
+query_template = '''
+WITH
+  rounded_with_duplicates AS (
+    SELECT
+      CAST((recorded_at / {selection_coef}) AS INTEGER) * {selection_coef} AS rounded_recorded_at,
+      sensor,
+      rowid
+    FROM measurement
+    WHERE
+      recorded_at >= ?
+    AND
+      recorded_at < ?
+  ),
+  unique_rowids AS (SELECT DISTINCT rowid FROM rounded_with_duplicates GROUP BY rounded_recorded_at, sensor)
+
+SELECT
+  recorded_at,
+  CAST((recorded_at / {rounding_coef}) AS INTEGER) * {rounding_coef} AS recorded_at,
+  sensor,
+  {measurement_type}
+FROM measurement
+WHERE
+  rowid IN (SELECT * FROM unique_rowids)
+'''
+
+
 measurement_type_matcher = re.compile(r'[a-z_]{1,20}')
 # https://www.sqlite.org/windowfunctions.html
 def query(parameters):
     pd =  dict(parameters)
+
+    start, end = int(pd['start']), int(pd['end'])
+    coef = 1
+    if end - start > 50 * 60:
+        coef = 10
+    elif end - start > 11 * 60 * 60:
+        coef = 100
+    elif end - start > 23 * 60 * 60:
+        coef = 1000
+    elif end - start > 47 * 60 * 60:
+        coef = 10000
 
     measurement_type = measurement_type_matcher.match(pd['measurementType']).group(0)
     with contextlib.closing(
@@ -33,10 +70,8 @@ def query(parameters):
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
         conn.row_factory = dict_factory
         return list(conn.execute(
-            'SELECT recorded_at, sensor, ' +
-            measurement_type +
-            ' FROM measurement WHERE recorded_at >= ? AND recorded_at < ?',
-            (int(pd['start']), int(pd['end']))
+            query_template.format(rounding_coef=coef, selection_coef=coef, measurement_type=measurement_type),
+            (start, end)
         ))
 
 
