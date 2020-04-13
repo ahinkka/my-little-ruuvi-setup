@@ -1,5 +1,5 @@
 import { h, render } from 'https://unpkg.com/preact@latest?module';
-import { useState, useEffect } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
+import { useState, useEffect, useLayoutEffect } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
 import Dygraph from 'https://unpkg.com/dygraphs@2.1.0?module';
 
 
@@ -31,7 +31,7 @@ const parseHash = (hash) => {
 }
 
 
-const plot = (element, start, end, measurementType, height) => {
+const plot = (element, start, end, measurementType) => {
   const startEpoch = Math.floor(start.getTime() / 1000)
   const endEpoch = Math.floor(end.getTime() / 1000)
   fetch('measurements.tsv' +
@@ -84,8 +84,7 @@ const plot = (element, start, end, measurementType, height) => {
           legend: 'always',
           animatedZooms: true,
           rollPeriod: rollPeriod,
-          ylabel: yLabel,
-          height: height
+          ylabel: yLabel
         }
       )
     })
@@ -114,6 +113,18 @@ const periodToMillis = (period) => {
   } else {
     throw new Error(`Unknown unit: ${unit}`)
   }
+}
+
+
+const useWindowSize = () => {
+  const [size, setSize] = useState([0, 0])
+  useLayoutEffect(() => {
+    const updateSize = () => setSize([window.innerWidth, window.innerHeight])
+    window.addEventListener('resize', updateSize)
+    updateSize()
+    return () => window.removeEventListener('resize', updateSize)
+  }, [])
+  return size
 }
 
 
@@ -163,15 +174,17 @@ const Header = (props) => {
 
 const Chart = (props) => {
   const { start, end, measurementType, innerHeight } = props
+  const [width, height] = useWindowSize()
+
   useEffect(() => {
-    plot((() => document.getElementById('chart'))(), start, end, measurementType, innerHeight - 200)
+    plot((() => document.getElementById('chart'))(), start, end, measurementType)
   }, [start, end, measurementType])
 
   return h('div', { className: 'row', style: {
     marginTop: '20px',
     marginRight: '10px',
   }}, [
-    h('div', { className: 'col-12', id: 'chart' })
+    h('div', { className: 'col-12', id: 'chart', style: { height: height - 200 }})
   ]);
 }
 
@@ -218,11 +231,9 @@ const App = (props) => {
     h(Chart, {
       start: new Date(now - periodToMillis(period)),
       end: now,
-      measurementType,
-      innerHeight: window.innerHeight
+      measurementType
     }),
   ])
 }
 
 window.onload = () => render(h(App), document.getElementById('spa'))
-window.onresize = () => render(h(App), document.getElementById('spa'))
