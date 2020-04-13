@@ -74,7 +74,7 @@ const plot = (element, start, end, measurementType, height) => {
 	  axes: {
 	    x: {
               ticker: Dygraph.dateTicker,
-              valueFormatter: Dygraph.dateString_,
+              valueFormatter: (d) => Dygraph.dateString_(d, false),
 
               axisLabelFormatter: (d, gran, opts) =>
                 Dygraph.dateAxisLabelFormatter(new Date(d), gran, opts)
