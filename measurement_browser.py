@@ -10,7 +10,9 @@ from urllib.parse import urlparse, parse_qsl
 ALLOW_LIST = [
     'index.html',
     'spa.js',
-    'measurements.tsv'
+    'uPlot.min.css',
+    'uPlot.iife.min.js',
+    'measurements.json'
 ]
 
 
@@ -79,7 +81,7 @@ def stringify(v):
 
 
 measurement_type_matcher = re.compile(r'[a-z_]{1,20}')
-def tsv_query(parameters, file):
+def json_query(parameters, file):
     pd =  dict(parameters)
     start, end = int(pd['start']), int(pd['end'])
     measurement_type = measurement_type_matcher.match(pd['measurementType']).group(0)
@@ -88,12 +90,17 @@ def tsv_query(parameters, file):
             sqlite3.connect('measurements.db',
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
         sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement')))
-        header = '\t'.join(['Date'] + sensors).encode('utf-8')
-        file.write(header)
-        file.write('\n'.encode('utf-8'))
+
+        matrix = [[]]
+        for sensor in sensors:
+            matrix.append([])
+
         for row in conn.execute(create_sql(measurement_type, sensors), (start, end)):
-            file.write('\t'.join(stringify(c) for c in row).encode('utf-8'))
-            file.write('\n'.encode('utf-8'))
+            matrix[0].append(row[0])
+            for idx, value in enumerate(row[1:]):
+                matrix[idx + 1].append(value)
+
+        file.write(json.dumps({'data': matrix, 'sensors': sensors}).encode('utf-8'))
 
 
 class MeasurementHandler(SimpleHTTPRequestHandler):
@@ -107,11 +114,11 @@ class MeasurementHandler(SimpleHTTPRequestHandler):
         if path_suffix not in ALLOW_LIST:
             return self.send_error(403, message='Path not allowed', explain=None)
 
-        if parsed.path.endswith('measurements.tsv'):
+        if parsed.path.endswith('measurements.json'):
             self.send_response(200)
-            self.send_header('Content-Type', 'text/tab-separated-values')
+            self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            tsv_query(parse_qsl(parsed.query), self.wfile)
+            json_query(parse_qsl(parsed.query), self.wfile)
             return
 
         return super().do_GET(*args, **kwargs)

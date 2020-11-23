@@ -1,6 +1,5 @@
 import { h, render } from 'https://unpkg.com/preact@latest?module';
 import { useState, useEffect, useLayoutEffect } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
-import Dygraph from 'https://unpkg.com/dygraphs@2.1.0?module';
 
 
 const serializeHash = (contents) => {
@@ -21,25 +20,64 @@ const serializeHash = (contents) => {
 }
 
 const parseHash = (hash) => {
-  let parts = hash.slice(1).split('&')
-  let result = {}
+  const parts = hash.slice(1).split('&')
+  const result = {}
   for (let part of parts) {
-    let [key, value] = part.split('=')
+    const [key, value] = part.split('=')
     result[key] = value
   }
   return result
 }
 
 
-const plot = (element, start, end, measurementType) => {
+const minMax = (twoDArray, startDim) => {
+  let min = null
+  let max = null
+
+  if (startDim === undefined) {
+    startDim = 0
+  }
+
+  for (let i = startDim; i < twoDArray.length; i++) {
+    for (let j = 0; j < twoDArray[i].length; j++) {
+      const v = twoDArray[i][j]
+      if (min == null || v < min) min = v
+      if (max == null || v >= max) max = v
+    }
+  }
+
+  return { min, max }
+}
+
+
+// https://www.nature.com/articles/nmeth.1618
+const colors = [
+  [0, 0, 0],
+  [230, 159, 0],
+  [86, 180, 233],
+  [0, 158, 115],
+  [240, 228, 66],
+  [0, 114, 178],
+  [213, 94, 0],
+  [204, 121, 167],
+].map((triple) => `rgb(${triple[0]}, ${triple[1]}, ${triple[2]})`)
+
+
+let _plot = undefined
+const plot = (element, start, end, measurementType, shouldClearElement, width, height) => {
   const startEpoch = Math.floor(start.getTime() / 1000)
   const endEpoch = Math.floor(end.getTime() / 1000)
-  fetch('measurements.tsv' +
+  fetch('measurements.json' +
 	`?start=${startEpoch}` +
 	`&end=${endEpoch}` +
 	`&measurementType=${measurementType}`)
-    .then((response) => response.text())
+    .then((response) => response.json())
     .then((data) => {
+      if (shouldClearElement) {
+	_plot = undefined
+        element.innerHTML = ''
+      }
+
       const periodSecs = endEpoch - startEpoch
       let rollPeriod = 1
       if (periodSecs > 60 * 60) {
@@ -50,43 +88,147 @@ const plot = (element, start, end, measurementType) => {
 	rollPeriod = 30
       }
 
-      let yLabel
-      if (measurementType == 'temperature') {
-        yLabel = '°C'
-      } else if (measurementType == 'humidity') {
-        yLabel = '%'
-      } else if (measurementType == 'pressure') {
-        yLabel = 'P'
-        // yLabel = 'hPa'
-        // yValueParser: measurementType == 'pressure' ? (v) => parseFloat(v) / 100 : undefined,
-        // baselines: measurementType == 'pressure' ? [{value: 1013.25, label: 'atm'}] : undefined,
-      } else if (measurementType == 'battery_voltage') {
-        yLabel = 'V'
-      } else if (measurementType == 'tx_power') {
-        yLabel = 'dBm'
+
+      const makeScale = (measurementType, unit) => {
+	return {
+	  scale: measurementType,
+	  values: (self, ticks) => ticks.map(rawValue => rawValue.toFixed(1) + unit)
+	}
       }
 
-      const g = new Dygraph(
-	element,
-	data,
-	{
-          xValueParser: (v) => 1000 * parseInt(v),
-	  axes: {
-	    x: {
-              ticker: Dygraph.dateTicker,
-              valueFormatter: (d) => Dygraph.dateString_(d, false),
+      const effData = data.data
+      let scale
+      let hooks = undefined
+      if (measurementType == 'temperature') {
+	let range = [13.0, 24.0]
+	const { min, max } = minMax(effData, 1)
+	if (min !== null && max !== null) {
+	  if (min < range[0]) range = undefined
+	  if (max > range[1]) range = undefined
+	}
 
-              axisLabelFormatter: (d, gran, opts) =>
-                Dygraph.dateAxisLabelFormatter(new Date(d), gran, opts)
-            },
-          },
+	scale = {
+	  scale: measurementType,
+	  auto: range === undefined ? true : false,
+	  range: range,
+	  values: (self, ticks) => ticks.map(rawValue => rawValue.toFixed(1) + " °C")
+	}
+      } else if (measurementType == 'humidity') {
+	let range = [25.0, 75.0]
 
-          legend: 'always',
-          animatedZooms: true,
-          rollPeriod: rollPeriod,
-          ylabel: yLabel
-        }
-      )
+	const { min, max } = minMax(effData, 1)
+	if (min !== null && max !== null) {
+	  if (min < range[0]) range[0] = 0.0
+	  if (max > range[1]) range[1] = 100.0
+	}
+
+	scale = {
+	  scale: measurementType,
+	  auto: false,
+	  range: range,
+	  values: (self, ticks) => ticks.map(rawValue => rawValue.toFixed(1) + " %")
+	}
+      } else if (measurementType == 'pressure') {
+	let range = [980.0, 1025.0]
+	for (let i = 1; i < effData.length; i++) {
+	  for (let j = 0; j < effData[i].length; j++) {
+	    let currentValue = effData[i][j]
+	    if (currentValue != null) {
+	      const newValue = currentValue / 100.0
+	      effData[i][j] = newValue
+	      
+	      if (range !== undefined && (newValue < range[0] || newValue > range[1])) {
+		range = undefined
+	      }
+	    }
+	  }
+	}
+
+	scale = {
+	  scale: measurementType,
+	  auto: range === undefined ? true : false,
+	  range: range,
+	  values: (self, ticks) => ticks.map(rawValue => rawValue + " hPa")
+	}
+
+	hooks = {
+	  draw: [(u, si) => {
+	    const { ctx } = u
+	    const xd = u.data[0]
+	    const x0 = u.valToPos(xd[0], 'x', true)
+	    const y = u.valToPos(1013.25, scale.scale, true)
+	    const x1 = u.valToPos(xd[xd.length - 1], 'x', true)
+
+	    ctx.save()
+
+	    ctx.font = '12px'
+	    ctx.fillStyle = "#000000"
+	    ctx.textAlign = "left"
+	    ctx.textBaseline = "bottom"
+	    ctx.fillText("atm", x0, y)
+
+	    ctx.strokeStyle = "#000000"
+	    ctx.setLineDash([0])
+	    ctx.lineWidth = 2
+	    ctx.beginPath()
+	    ctx.moveTo(x0, y)
+	    ctx.lineTo(x1, y)
+	    ctx.stroke()
+
+	    ctx.restore()
+	  }]
+	}
+      } else if (measurementType == 'battery_voltage') {
+	scale = makeScale(measurementType, "V")
+      } else if (measurementType == 'tx_power') {
+	scale = makeScale(measurementType, "dBm")
+      }
+
+      // console.log(data)
+      // console.log(data.sensors)
+
+      let colorIndex = 0
+      const series = data.sensors.reduce((acc, v) => {
+	acc.push({
+	  label: v,
+	  scale: scale.scale,
+	  // stroke: "black",
+	  stroke: colors[colorIndex],
+	  width: 2,
+	  dash: [((data.sensors.length - colorIndex) + 1) * 3],
+	  spanGaps: true,
+	})
+	colorIndex++
+	return acc
+      }, [{}])
+      // console.log(series)
+
+      let scales = {}
+      scales[scale.scale] = scale
+      scale['size'] = 100
+      console.log('scales', scales)
+
+      let opts = {
+	width: width,
+	height: height,
+	// height: 600,
+	// gutters: { x: 100, y: 100 },
+	series: series,
+	axes: [{}, scale],
+	scales: scales,
+	hooks: hooks,
+      }
+
+      // console.log("opts", opts)
+      // console.log("data", effData)
+
+      if (_plot === undefined) {
+	const g = new uPlot(opts, effData, element)
+	_plot = g
+      } else {
+	_plot.setData(effData)
+	_plot.setSeries(opts.series)
+      }
     })
 }
 
@@ -176,16 +318,23 @@ const Chart = (props) => {
   const { start, end, measurementType, innerHeight } = props
   const [width, height] = useWindowSize()
 
+  const [previousMeasurementType, setPreviousMeasurementType] = useState(null)
+
   useEffect(() => {
-    plot((() => document.getElementById('chart'))(), start, end, measurementType)
-  }, [start, end, measurementType])
+    let shouldClearElement = false
+    if (measurementType != previousMeasurementType) {
+      shouldClearElement = true
+    }
+
+    plot((() => document.getElementById('chart'))(), start, end, measurementType, shouldClearElement, width - 350, height - 200)
+  }, [start, end, measurementType, width, height])
 
   return h('div', { className: 'row', style: {
     marginTop: '20px',
     marginRight: '10px',
   }}, [
     h('div', { className: 'col-12', id: 'chart', style: { height: height - 200 }})
-  ]);
+  ])
 }
 
 
