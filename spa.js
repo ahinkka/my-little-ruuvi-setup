@@ -323,7 +323,23 @@ const ChartWithData = (props) => {
   const { measurementType, data } = props
   const [previousMeasurementType, setPreviousMeasurementType] = useState(null)
   const element = useRef(null)
-  const [width, height] = useWindowSize()
+  const [windowWidth, windowHeight] = useWindowSize()
+
+  let [width, height] = [null, null]
+  if (element.current) {
+    const boundingRect = element.current.getBoundingClientRect()
+    width = Math.floor(boundingRect.width)
+    const maxHeight = (windowHeight - 100)
+    height = width * 0.75
+    if (height > maxHeight) height = maxHeight
+  }
+
+  useEffect(() => {
+    if (element.current && data) {
+      element.current.style.width = width;
+      element.current.style.height = height;
+    }
+  }, [width, height])
 
   useEffect(() => {
     if (element.current && data) {
@@ -332,8 +348,8 @@ const ChartWithData = (props) => {
         measurementType,
         data,
         measurementType == previousMeasurementType,
-        width - 350,
-        height - 200
+        width,
+        height
       )
     } else {
       // console.log('no current element')
@@ -344,7 +360,8 @@ const ChartWithData = (props) => {
       ref: element,
       id: 'chart',
       style: {
-        height: height - 200
+        width: width,
+        height: height
       }
   }, [])
 }
