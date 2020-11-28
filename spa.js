@@ -1,5 +1,5 @@
 import { h, render } from 'https://unpkg.com/preact@latest?module';
-import { useState, useEffect, useLayoutEffect } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
+import { useState, useEffect, useLayoutEffect, useRef } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
 
 
 const serializeHash = (contents) => {
@@ -112,13 +112,13 @@ const scaleForPressure = (values) => {
     for (let j = 0; j < values[i].length; j++) {
       let currentValue = values[i][j]
       if (currentValue != null) {
-	const newValue = currentValue / 100.0
-	values[i][j] = newValue
+        const newValue = currentValue / 100.0
+        values[i][j] = newValue
 
-	if (range !== undefined && (newValue < range[0] || newValue > range[1])) {
-	  console.info(`Pressure beyond normal ${range} range, defaulting to auto range`)
-	  range = undefined
-	}
+        if (range !== undefined && (newValue < range[0] || newValue > range[1])) {
+          console.info(`Pressure beyond normal ${range} range, defaulting to auto range`)
+          range = undefined
+        }
       }
     }
   }
@@ -194,53 +194,7 @@ const scaleAndHooksForMeasurementTypeAndValues = (measurementType, values) => {
   } else if (measurementType == 'tx_power') {
     return [scaleFromMeasurementTypeAndUnit(measurementType, "dBm"), null]
   }
-  throw new Exception(`unhandled measurement type: ${measurementType}`)
-}
-
-
-let _plot = undefined
-const plot = (element, start, end, measurementType, shouldClearElement, width, height) => {
-  const startEpoch = Math.floor(start.getTime() / 1000)
-  const endEpoch = Math.floor(end.getTime() / 1000)
-  fetch('measurements.json' +
-	`?start=${startEpoch}` +
-	`&end=${endEpoch}` +
-	`&measurementType=${measurementType}`)
-    .then((response) => response.json())
-    .then((data) => {
-      if (shouldClearElement) {
-	_plot = undefined
-        element.innerHTML = ''
-      }
-
-      const effData = data.data
-      let [scale, hooks] = scaleAndHooksForMeasurementTypeAndValues(measurementType, effData)
-      console.assert(scale, 'no scale')
-
-      const series = seriesFromSensorsAndScaleName(data.sensors, scale.scale)
-      console.assert(series, 'no series')
-
-      let scales = {}
-      scales[scale.scale] = scale
-      scale['size'] = 100 // makes the left side not clip the scale values
-
-      let opts = {
-	width: width,
-	height: height,
-	series: series,
-	axes: [{}, scale],
-	scales: scales,
-	hooks: hooks,
-      }
-
-      if (_plot === undefined) {
-	const g = new uPlot(opts, effData, element)
-	_plot = g
-      } else {
-	_plot.setData(effData)
-	_plot.setSeries(opts.series)
-      }
-    })
+  console.assert(false, `unhandled measurement type: "${measurementType}"?`)
 }
 
 
@@ -327,39 +281,95 @@ const Nav = (props) => {
     ]),
     h('fieldset', {}, [
       h(MeasurementTypeDropdown, {
-	className: '',
-	period,
-	measurementType,
-	measurementTypeCallback
+        className: '',
+        period,
+        measurementType,
+        measurementTypeCallback
       })
     ])
   ])
 }
 
 
-const Chart = (props) => {
-  const { start, end, measurementType, innerHeight } = props
+const plot = (element, measurementType, data, shouldClearElement, width, height) => {
+  const effData = data.data
+  let [scale, hooks] = scaleAndHooksForMeasurementTypeAndValues(measurementType, effData)
+  console.assert(scale, 'no scale')
+
+  const series = seriesFromSensorsAndScaleName(data.sensors, scale.scale)
+  console.assert(series, 'no series')
+
+  let scales = {}
+  scales[scale.scale] = scale
+  scale['size'] = 100 // makes the left side not clip the scale values
+
+  let opts = {
+    width: width,
+    height: height,
+    series: series,
+    axes: [{}, scale],
+    scales: scales,
+    hooks: hooks,
+  }
+
+  // This is kinda crude, we might be able to use the same plot object. Just
+  // couldn't make it work this time.
+  element.innerHTML = ''
+  const g = new uPlot(opts, effData, element)
+}
+
+
+const ChartWithData = (props) => {
+  const { measurementType, data } = props
+  const [previousMeasurementType, setPreviousMeasurementType] = useState(null)
+  const element = useRef(null)
   const [width, height] = useWindowSize()
 
-  const [previousMeasurementType, setPreviousMeasurementType] = useState(null)
-
   useEffect(() => {
-    let shouldClearElement = false
-    if (measurementType != previousMeasurementType) {
-      shouldClearElement = true
+    if (element.current && data) {
+      plot(
+        element.current,
+        measurementType,
+        data,
+        measurementType == previousMeasurementType,
+        width - 350,
+        height - 200
+      )
+    } else {
+      // console.log('no current element')
     }
+  }, [measurementType, data, width, height])
 
-    plot((() => document.getElementById('chart'))(), start, end, measurementType, shouldClearElement, width - 350, height - 200)
-  }, [start, end, measurementType, width, height])
-
-  return h('div', {}, [
-    h('div', {
-      className: '',
+  return h('div', {
+      ref: element,
       id: 'chart',
       style: {
-	height: height - 200
+        height: height - 200
       }
-    })
+  }, [])
+}
+
+
+const Chart = (props) => {
+  const { start, end, measurementType } = props
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    const startEpoch = Math.floor(start.getTime() / 1000)
+    const endEpoch = Math.floor(end.getTime() / 1000)
+    fetch('measurements.json' +
+          `?start=${startEpoch}` +
+          `&end=${endEpoch}` +
+          `&measurementType=${measurementType}`)
+      .then((response) => response.json())
+      .then(setData)
+  }, [start, end, measurementType])
+
+  return h('div', {}, [
+    h(ChartWithData, {
+      measurementType,
+      data
+    }),
   ])
 }
 
@@ -396,12 +406,12 @@ const App = (props) => {
       measurementType,
       measurementTypeCallback: setMeasurementType,
       // timeCallback: (start, end) => {
-      // 	setStart(start)
-      // 	setEnd(end)
+      //        setStart(start)
+      //        setEnd(end)
       // }
       period,
       periodCallback: (period) => {
-	setPeriod(period)
+        setPeriod(period)
       }
     }),
     h(Chart, {
