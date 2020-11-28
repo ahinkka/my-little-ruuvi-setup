@@ -78,17 +78,6 @@ const plot = (element, start, end, measurementType, shouldClearElement, width, h
         element.innerHTML = ''
       }
 
-      const periodSecs = endEpoch - startEpoch
-      let rollPeriod = 1
-      if (periodSecs > 60 * 60) {
-	rollPeriod = 5
-      } else if (periodSecs > 6 * 60 * 60) {
-	rollPeriod = 15
-      } else if (periodSecs > 12 * 60 * 60) {
-	rollPeriod = 30
-      }
-
-
       const makeScale = (measurementType, unit) => {
 	return {
 	  scale: measurementType,
