@@ -181,6 +181,23 @@ const seriesFromSensorsAndScaleName = (sensors, scaleName) => {
 }
 
 
+const scaleAndHooksForMeasurementTypeAndValues = (measurementType, values) => {
+  if (measurementType == 'temperature') {
+    return [scaleForTemperature(values), null]
+  } else if (measurementType == 'humidity') {
+    return [scaleForHumidity(values), null]
+  } else if (measurementType == 'pressure') {
+    const scale = scaleForPressure(values)
+    return [scale, pressureHooksFromScaleName(scale.scale)]
+  } else if (measurementType == 'battery_voltage') {
+    return [scaleFromMeasurementTypeAndUnit(measurementType, "V"), null]
+  } else if (measurementType == 'tx_power') {
+    return [scaleFromMeasurementTypeAndUnit(measurementType, "dBm"), null]
+  }
+  throw new Exception(`unhandled measurement type: ${measurementType}`)
+}
+
+
 let _plot = undefined
 const plot = (element, start, end, measurementType, shouldClearElement, width, height) => {
   const startEpoch = Math.floor(start.getTime() / 1000)
@@ -197,24 +214,8 @@ const plot = (element, start, end, measurementType, shouldClearElement, width, h
       }
 
       const effData = data.data
-      let scale = undefined
-      let hooks = undefined
-      if (measurementType == 'temperature') {
-	scale = scaleForTemperature(effData)
-      } else if (measurementType == 'humidity') {
-	scale = scaleForHumidity(effData)
-      } else if (measurementType == 'pressure') {
-	scale = scaleForPressure(effData)
-	hooks = pressureHooksFromScaleName(scale.scale)
-      } else if (measurementType == 'battery_voltage') {
-	scale = scaleFromMeasurementTypeAndUnit(measurementType, "V")
-      } else if (measurementType == 'tx_power') {
-	scale = scaleFromMeasurementTypeAndUnit(measurementType, "dBm")
-      }
+      let [scale, hooks] = scaleAndHooksForMeasurementTypeAndValues(measurementType, effData)
       console.assert(scale, 'no scale')
-
-      // console.log(data)
-      // console.log(data.sensors)
 
       const series = seriesFromSensorsAndScaleName(data.sensors, scale.scale)
       console.assert(series, 'no series')
@@ -231,9 +232,6 @@ const plot = (element, start, end, measurementType, shouldClearElement, width, h
 	scales: scales,
 	hooks: hooks,
       }
-
-      // console.log("opts", opts)
-      // console.log("data", effData)
 
       if (_plot === undefined) {
 	const g = new uPlot(opts, effData, element)
