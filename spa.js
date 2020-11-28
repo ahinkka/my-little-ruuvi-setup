@@ -63,6 +63,124 @@ const colors = [
 ].map((triple) => `rgb(${triple[0]}, ${triple[1]}, ${triple[2]})`)
 
 
+const scaleFromMeasurementTypeAndUnit = (measurementType, unit) => {
+  return {
+    scale: measurementType,
+    values: (self, ticks) => ticks.map(rawValue => rawValue.toFixed(1) + unit)
+  }
+}
+
+
+const scaleForTemperature = (values) => {
+  let range = [13.0, 24.0]
+  const { min, max } = minMax(values, 1)
+  if (min !== null && max !== null) {
+    if (min < range[0]) range = undefined
+    if (max > range[1]) range = undefined
+  }
+
+  return {
+    scale: 'temperature',
+    auto: range === undefined ? true : false,
+    range: range,
+    values: (self, ticks) => ticks.map(rawValue => rawValue.toFixed(1) + " °C")
+  }
+}
+
+
+const scaleForHumidity = (values) => {
+  let range = [25.0, 75.0]
+
+  const { min, max } = minMax(values, 1)
+  if (min !== null && max !== null) {
+    if (min < range[0]) range[0] = 0.0
+    if (max > range[1]) range[1] = 100.0
+  }
+
+  return {
+    scale: 'humidity',
+    auto: false,
+    range: range,
+    values: (self, ticks) => ticks.map(rawValue => rawValue.toFixed(1) + " %")
+  }
+}
+
+
+const scaleForPressure = (values) => {
+  let range = [980.0, 1035.0]
+  for (let i = 1; i < values.length; i++) {
+    for (let j = 0; j < values[i].length; j++) {
+      let currentValue = values[i][j]
+      if (currentValue != null) {
+	const newValue = currentValue / 100.0
+	values[i][j] = newValue
+
+	if (range !== undefined && (newValue < range[0] || newValue > range[1])) {
+	  console.info(`Pressure beyond normal ${range} range, defaulting to auto range`)
+	  range = undefined
+	}
+      }
+    }
+  }
+
+  return {
+    scale: 'pressure',
+    auto: range === undefined ? true : false,
+    range: range,
+    values: (self, ticks) => ticks.map(rawValue => rawValue + " hPa")
+  }
+}
+
+
+const pressureHooksFromScaleName = (scaleName) => {
+  return {
+    draw: [(u, si) => {
+      const { ctx } = u
+      const xd = u.data[0]
+      const x0 = u.valToPos(xd[0], 'x', true)
+      const y = u.valToPos(1013.25, scaleName, true)
+      const x1 = u.valToPos(xd[xd.length - 1], 'x', true)
+
+      ctx.save()
+
+      ctx.font = '12px'
+      ctx.fillStyle = "#000000"
+      ctx.textAlign = "left"
+      ctx.textBaseline = "bottom"
+      ctx.fillText("atm", x0, y)
+
+      ctx.strokeStyle = "#000000"
+      ctx.setLineDash([0])
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(x0, y)
+      ctx.lineTo(x1, y)
+      ctx.stroke()
+
+      ctx.restore()
+    }]
+  }
+}
+
+
+const seriesFromSensorsAndScaleName = (sensors, scaleName) => {
+  let colorIndex = 0
+  return sensors.reduce((acc, v) => {
+    acc.push({
+      label: v,
+      scale: scaleName,
+      // stroke: "black",
+      stroke: colors[colorIndex],
+      width: 2,
+      dash: [((sensors.length - colorIndex) + 1) * 3],
+      spanGaps: true,
+    })
+    colorIndex++
+    return acc
+  }, [{}])
+}
+
+
 let _plot = undefined
 const plot = (element, start, end, measurementType, shouldClearElement, width, height) => {
   const startEpoch = Math.floor(start.getTime() / 1000)
@@ -78,130 +196,36 @@ const plot = (element, start, end, measurementType, shouldClearElement, width, h
         element.innerHTML = ''
       }
 
-      const makeScale = (measurementType, unit) => {
-	return {
-	  scale: measurementType,
-	  values: (self, ticks) => ticks.map(rawValue => rawValue.toFixed(1) + unit)
-	}
-      }
-
       const effData = data.data
-      let scale
+      let scale = undefined
       let hooks = undefined
       if (measurementType == 'temperature') {
-	let range = [13.0, 24.0]
-	const { min, max } = minMax(effData, 1)
-	if (min !== null && max !== null) {
-	  if (min < range[0]) range = undefined
-	  if (max > range[1]) range = undefined
-	}
-
-	scale = {
-	  scale: measurementType,
-	  auto: range === undefined ? true : false,
-	  range: range,
-	  values: (self, ticks) => ticks.map(rawValue => rawValue.toFixed(1) + " °C")
-	}
+	scale = scaleForTemperature(effData)
       } else if (measurementType == 'humidity') {
-	let range = [25.0, 75.0]
-
-	const { min, max } = minMax(effData, 1)
-	if (min !== null && max !== null) {
-	  if (min < range[0]) range[0] = 0.0
-	  if (max > range[1]) range[1] = 100.0
-	}
-
-	scale = {
-	  scale: measurementType,
-	  auto: false,
-	  range: range,
-	  values: (self, ticks) => ticks.map(rawValue => rawValue.toFixed(1) + " %")
-	}
+	scale = scaleForHumidity(effData)
       } else if (measurementType == 'pressure') {
-	let range = [980.0, 1025.0]
-	for (let i = 1; i < effData.length; i++) {
-	  for (let j = 0; j < effData[i].length; j++) {
-	    let currentValue = effData[i][j]
-	    if (currentValue != null) {
-	      const newValue = currentValue / 100.0
-	      effData[i][j] = newValue
-	      
-	      if (range !== undefined && (newValue < range[0] || newValue > range[1])) {
-		range = undefined
-	      }
-	    }
-	  }
-	}
-
-	scale = {
-	  scale: measurementType,
-	  auto: range === undefined ? true : false,
-	  range: range,
-	  values: (self, ticks) => ticks.map(rawValue => rawValue + " hPa")
-	}
-
-	hooks = {
-	  draw: [(u, si) => {
-	    const { ctx } = u
-	    const xd = u.data[0]
-	    const x0 = u.valToPos(xd[0], 'x', true)
-	    const y = u.valToPos(1013.25, scale.scale, true)
-	    const x1 = u.valToPos(xd[xd.length - 1], 'x', true)
-
-	    ctx.save()
-
-	    ctx.font = '12px'
-	    ctx.fillStyle = "#000000"
-	    ctx.textAlign = "left"
-	    ctx.textBaseline = "bottom"
-	    ctx.fillText("atm", x0, y)
-
-	    ctx.strokeStyle = "#000000"
-	    ctx.setLineDash([0])
-	    ctx.lineWidth = 2
-	    ctx.beginPath()
-	    ctx.moveTo(x0, y)
-	    ctx.lineTo(x1, y)
-	    ctx.stroke()
-
-	    ctx.restore()
-	  }]
-	}
+	scale = scaleForPressure(effData)
+	hooks = pressureHooksFromScaleName(scale.scale)
       } else if (measurementType == 'battery_voltage') {
-	scale = makeScale(measurementType, "V")
+	scale = scaleFromMeasurementTypeAndUnit(measurementType, "V")
       } else if (measurementType == 'tx_power') {
-	scale = makeScale(measurementType, "dBm")
+	scale = scaleFromMeasurementTypeAndUnit(measurementType, "dBm")
       }
+      console.assert(scale, 'no scale')
 
       // console.log(data)
       // console.log(data.sensors)
 
-      let colorIndex = 0
-      const series = data.sensors.reduce((acc, v) => {
-	acc.push({
-	  label: v,
-	  scale: scale.scale,
-	  // stroke: "black",
-	  stroke: colors[colorIndex],
-	  width: 2,
-	  dash: [((data.sensors.length - colorIndex) + 1) * 3],
-	  spanGaps: true,
-	})
-	colorIndex++
-	return acc
-      }, [{}])
-      // console.log(series)
+      const series = seriesFromSensorsAndScaleName(data.sensors, scale.scale)
+      console.assert(series, 'no series')
 
       let scales = {}
       scales[scale.scale] = scale
-      scale['size'] = 100
-      console.log('scales', scales)
+      scale['size'] = 100 // makes the left side not clip the scale values
 
       let opts = {
 	width: width,
 	height: height,
-	// height: 600,
-	// gutters: { x: 100, y: 100 },
 	series: series,
 	axes: [{}, scale],
 	scales: scales,
