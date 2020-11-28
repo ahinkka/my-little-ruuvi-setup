@@ -294,22 +294,34 @@ const MeasurementTypeDropdown = (props) => {
 }
 
 
-const Header = (props) => {
+const Header = (props) => h('header', {}, [
+  h('h3', { style: { display: 'inline' } }, 'Measurement browser')
+])
+
+
+const Nav = (props) => {
   const { period, periodCallback, measurementType, measurementTypeCallback } = props
   const millisInHour = 60 * 60 * 1000
-  return h('div', { className: 'row row-eq-height', style: { marginTop: '25px' }}, [
-    h('h3', { className: 'col col-4' }, 'Measurement browser'),
-    h('div', { className: 'col align-middle', style: { lineHeight: 2.5 } },
-      [h('div', { className: 'float-right'}, 'Show last')]),
-    h(QuickChooser, { className: 'col', periodCallback, period: '1h' }),
-    h(QuickChooser, { className: 'col', periodCallback, period: '3h' }),
-    h(QuickChooser, { className: 'col', periodCallback, period: '6h' }),
-    h(QuickChooser, { className: 'col', periodCallback, period: '12h' }),
-    h(QuickChooser, { className: 'col', periodCallback, period: '24h' }),
-    h(QuickChooser, { className: 'col', periodCallback, period: '2d' }),
-    h(QuickChooser, { className: 'col', periodCallback, period: '3d' }),
-    h(QuickChooser, { className: 'col', periodCallback, period: '7d' }),
-    h(MeasurementTypeDropdown, { className: 'col', period, measurementType, measurementTypeCallback })
+  return h('nav', {}, [
+    h('fieldset', {}, [
+      h('legend', {}, 'Show last'),
+      h(QuickChooser, { className: '', periodCallback, period: '1h' }),
+      h(QuickChooser, { className: '', periodCallback, period: '3h' }),
+      h(QuickChooser, { className: '', periodCallback, period: '6h' }),
+      h(QuickChooser, { className: '', periodCallback, period: '12h' }),
+      h(QuickChooser, { className: '', periodCallback, period: '24h' }),
+      h(QuickChooser, { className: '', periodCallback, period: '2d' }),
+      h(QuickChooser, { className: '', periodCallback, period: '3d' }),
+      h(QuickChooser, { className: '', periodCallback, period: '7d' }),
+    ]),
+    h('fieldset', {}, [
+      h(MeasurementTypeDropdown, {
+	className: '',
+	period,
+	measurementType,
+	measurementTypeCallback
+      })
+    ])
   ])
 }
 
@@ -329,11 +341,14 @@ const Chart = (props) => {
     plot((() => document.getElementById('chart'))(), start, end, measurementType, shouldClearElement, width - 350, height - 200)
   }, [start, end, measurementType, width, height])
 
-  return h('div', { className: 'row', style: {
-    marginTop: '20px',
-    marginRight: '10px',
-  }}, [
-    h('div', { className: 'col-12', id: 'chart', style: { height: height - 200 }})
+  return h('div', {}, [
+    h('div', {
+      className: '',
+      id: 'chart',
+      style: {
+	height: height - 200
+      }
+    })
   ])
 }
 
@@ -365,7 +380,8 @@ const App = (props) => {
 
   const now = new Date()
   return h('div', null, [
-    h(Header, {
+    h(Header),
+    h(Nav, {
       measurementType,
       measurementTypeCallback: setMeasurementType,
       // timeCallback: (start, end) => {
@@ -385,4 +401,4 @@ const App = (props) => {
   ])
 }
 
-window.onload = () => render(h(App), document.getElementById('spa'))
+window.onload = () => render(h(App), document.getElementById('content'))

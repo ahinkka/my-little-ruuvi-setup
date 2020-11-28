@@ -1,0 +1,36 @@
+header {
+    display: inline-block;
+    margin-right: 1em;
+    height: 2ex;
+}
+
+header * {
+    display: inline;
+    vertical-align: middle;
+}
+
+nav {
+    display: inline-block;
+    height: 2ex;
+}
+
+nav * {
+    display: inline;
+    vertical-align: middle;
+}
+
+legend {
+    float: left;
+}
+
+fieldset {
+    display: inline-block;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    height: 2ex;
+}
+
+fieldset * {
+    vertical-align: middle;
+}

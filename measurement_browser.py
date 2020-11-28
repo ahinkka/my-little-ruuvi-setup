@@ -9,6 +9,7 @@ from urllib.parse import urlparse, parse_qsl
 
 ALLOW_LIST = [
     'index.html',
+    'style.css',
     'spa.js',
     'uPlot.min.css',
     'uPlot.iife.min.js',
