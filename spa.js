@@ -320,7 +320,7 @@ const plot = (element, measurementType, data, shouldClearElement, width, height)
 
 
 const ChartWithData = (props) => {
-  const { measurementType, data } = props
+  const { data } = props
   const [previousMeasurementType, setPreviousMeasurementType] = useState(null)
   const element = useRef(null)
   const [windowWidth, windowHeight] = useWindowSize()
@@ -345,16 +345,16 @@ const ChartWithData = (props) => {
     if (element.current && data) {
       plot(
         element.current,
-        measurementType,
+        data.measurementType,
         data,
-        measurementType == previousMeasurementType,
+        data.measurementType == previousMeasurementType,
         width,
         height
       )
     } else {
       // console.log('no current element')
     }
-  }, [measurementType, data, width, height])
+  }, [data, width, height])
 
   return h('div', {
       ref: element,
@@ -379,14 +379,14 @@ const Chart = (props) => {
           `&end=${endEpoch}` +
           `&measurementType=${measurementType}`)
       .then((response) => response.json())
-      .then(setData)
+      .then((data) => {
+	data.measurementType = measurementType
+	setData(data)
+      })
   }, [start, end, measurementType])
 
   return h('div', {}, [
-    h(ChartWithData, {
-      measurementType,
-      data
-    }),
+    h(ChartWithData, { data }),
   ])
 }
 
