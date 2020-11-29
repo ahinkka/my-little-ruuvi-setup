@@ -34,7 +34,7 @@ def summarize_period_containing(conn, measurement_type, period_secs, containing_
     sensors = list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement'))
 
     for sensor in sensors:
-        values = list(r[0] for r in conn.execute(f"SELECT {measurement_type} FROM measurement WHERE sensor = ? AND recorded_at >= ?", (sensor, period_start,)))
+        values = list(r[0] for r in conn.execute(f"SELECT {measurement_type} FROM measurement WHERE sensor = ? AND recorded_at >= ? AND recorded_at < ?", (sensor, period_start, period_start + period_secs)))
 
         if len(values) == 0:
             logger.debug(f'No {measurement_type} values for {sensor} starting {period_start}, period {period_secs}')
@@ -70,23 +70,40 @@ def summarize_single_period(conn, period_secs, epoch_secs_containing):
             summarize_period_containing(conn, measurement_type, period_secs, epoch_secs_containing)
 
 
-def summarize_latest(args):
-    with contextlib.closing(
-            sqlite3.connect('measurements_backup.db',
-                            detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
-        summarize_single_period(conn, 3600, int(time.time()))
-        summarize_single_period(conn, 43200, int(time.time()))
-        summarize_single_period(conn, 86400, int(time.time()))
+def summarize_latest(conn, args):
+    summarize_single_period(conn, 3600, int(time.time()))
+    summarize_single_period(conn, 10800, int(time.time()))
+    summarize_single_period(conn, 86400, int(time.time()))
 
 
-def summarize_since(args):
-    with contextlib.closing(
-            sqlite3.connect('measurements_backup.db',
-                            detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
-        pass
-        # summarize_single_period(conn, 3600, int(time.time()))
-        # summarize_single_period(conn, 43200, int(time.time()))
-        # summarize_single_period(conn, 86400, int(time.time()))
+def summarize_since(conn, args):
+    arg_pairs = []
+    for period_secs in [3600, 10800, 86400]:
+        epochs = range(int(time.time()), int(args.since.timestamp()), -period_secs)
+        for e in epochs:
+            arg_pairs.append((period_secs, e))
+
+    arg_pairs.sort(key=lambda x: x[1], reverse=True)
+
+    started_at = dt.datetime.now()
+    for index, pair in enumerate(arg_pairs):
+        time_taken = (dt.datetime.now() - started_at).total_seconds()
+        avg_time_per_item = time_taken / float(index + 1)
+        time_to_go = (len(arg_pairs) - index) * avg_time_per_item
+
+        period_secs, e = pair
+        logger.info(f'Summarizing ({period_secs}, {e}), taken: {time_taken}s, to go: {time_to_go}s')
+        summarize_single_period(conn, period_secs, e)
+
+
+def clear_summaries(conn, args):
+    tables = list(r[0] for r in conn.execute("select name from sqlite_master where type = 'table' and name like 'summary_%'"))
+
+    for table in tables:
+        conn.execute(f'drop table {table}')
+        conn.commit()
+        logger.info(f'Table {table} dropped')
+
 
 if __name__ == '__main__':
     import argparse
@@ -104,14 +121,22 @@ if __name__ == '__main__':
     parser.add_argument('--debug', default=False, action='store_true')
 
     subparsers = parser.add_subparsers(help='sub-command help')
+
     parser_a = subparsers.add_parser('summarize-latest')
     parser_a.set_defaults(func=summarize_latest)
+
     parser_b = subparsers.add_parser('summarize-since')
     parser_b.add_argument('since', help='start date in YYYY-MM-DD format', type=valid_date)
     parser_b.set_defaults(func=summarize_since)
+
+    parser_c = subparsers.add_parser('clear-summaries')
+    parser_c.set_defaults(func=clear_summaries)
 
     args = parser.parse_args()
     if args.debug:
         logger.setLevel(logging.DEBUG)
 
-    args.func(args)
+    with contextlib.closing(
+            sqlite3.connect('measurements_backup.db',
+                            detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
+        args.func(conn, args)
