@@ -34,6 +34,9 @@ def summarize_period_containing(conn, measurement_type, period_secs, containing_
     sensors = list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement'))
 
     for sensor in sensors:
+        if len(conn.execute(f'SELECT 1 FROM {table_name(measurement_type, period_secs)} WHERE starts_at = ? AND sensor = ?', (period_start, sensor)).fetchall()) == 1:
+            continue
+
         values = list(r[0] for r in conn.execute(f"SELECT {measurement_type} FROM measurement WHERE sensor = ? AND recorded_at >= ? AND recorded_at < ?", (sensor, period_start, period_start + period_secs)))
 
         if len(values) == 0:
