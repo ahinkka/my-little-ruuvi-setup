@@ -81,25 +81,46 @@ def stringify(v):
         return str(v)
 
 
+def result_matrix_from_measurements(conn, sensors, start, end, measurement_type):
+    result = [[]]
+    for sensor in sensors:
+        result.append([])
+
+    for row in conn.execute(create_sql(measurement_type, sensors), (start, end)):
+        result[0].append(row[0])
+        for idx, value in enumerate(row[1:]):
+            result[idx + 1].append(value)
+
+    return result
+
+
+# [[<ajat>], <taulukot per sensori>]
+def table_name(measurement_type, period_secs):
+    return f"summary_{measurement_type}_{period_secs}"
+
+
+def result_matrix_from_summaries(conn, sensors, start, end, measurement_type):
+    pass
+
+
 measurement_type_matcher = re.compile(r'[a-z_]{1,20}')
 def json_query(parameters, file):
     pd =  dict(parameters)
     start, end = int(pd['start']), int(pd['end'])
+    window = int(pd['window'])
     measurement_type = measurement_type_matcher.match(pd['measurementType']).group(0)
 
     with contextlib.closing(
             sqlite3.connect('measurements.db',
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
+
         sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement')))
 
-        matrix = [[]]
-        for sensor in sensors:
-            matrix.append([])
-
-        for row in conn.execute(create_sql(measurement_type, sensors), (start, end)):
-            matrix[0].append(row[0])
-            for idx, value in enumerate(row[1:]):
-                matrix[idx + 1].append(value)
+        window = 60
+        if window == 60:
+            matrix = result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
+        else:
+            matrix = result_matrix_from_summaries(conn, sensors, start, end, measurement_type)
 
         file.write(json.dumps({'data': matrix, 'sensors': sensors}).encode('utf-8'))
 
