@@ -291,13 +291,15 @@ const Nav = (props) => {
     h('fieldset', {}, [
       h('legend', {}, 'Show last'),
       h(QuickChooser, { className: '', periodCallback, period: '1h' }),
-      h(QuickChooser, { className: '', periodCallback, period: '3h' }),
       h(QuickChooser, { className: '', periodCallback, period: '6h' }),
       h(QuickChooser, { className: '', periodCallback, period: '12h' }),
       h(QuickChooser, { className: '', periodCallback, period: '24h' }),
       h(QuickChooser, { className: '', periodCallback, period: '2d' }),
-      h(QuickChooser, { className: '', periodCallback, period: '3d' }),
       h(QuickChooser, { className: '', periodCallback, period: '7d' }),
+      h(QuickChooser, { className: '', periodCallback, period: '30d' }),
+      h(QuickChooser, { className: '', periodCallback, period: '90d' }),
+      h(QuickChooser, { className: '', periodCallback, period: '180d' }),
+      h(QuickChooser, { className: '', periodCallback, period: '365d' }),
     ]),
     h('fieldset', {}, [
       h(MeasurementTypeDropdown, {
