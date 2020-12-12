@@ -173,7 +173,7 @@ const seriesFromSensorsAndScaleName = (sensors, summaries, scaleName) => {
 	stroke: colors[colorIndex],
 	fill: "rgba(0, 0, 0, .07)",
 	width: 0,
-	band: true
+	band: true,
       })
 
       acc.push({
@@ -193,7 +193,7 @@ const seriesFromSensorsAndScaleName = (sensors, summaries, scaleName) => {
       stroke: colors[colorIndex],
       width: 2,
       dash: [((sensors.length - colorIndex) + 1) * 3],
-      spanGaps: true,
+      // spanGaps: true,
     })
     colorIndex++
     return acc
