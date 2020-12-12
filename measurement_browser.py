@@ -25,9 +25,6 @@ def dict_factory(cursor, row):
     return d
 
 
-col_template = '{sensor_alias}.{measurement_type}'
-
-
 join_template = '''
 LEFT JOIN quantified_values AS {sensor_alias} ON
     {sensor_alias}.sensor = '{sensor_id}'
@@ -55,6 +52,8 @@ FROM quantified_values
 
 
 def create_sql(measurement_type, sensors):
+    col_template = '{sensor_alias}.{measurement_type}'
+
     return query_template.format(
         measurement_type=measurement_type,
         cols=',\n  '.join(
@@ -72,6 +71,10 @@ def create_sql(measurement_type, sensors):
             for idx, sensor in enumerate(sensors)
         )
     )
+
+
+def create_summary_sql(measurement_type, sensors, window_secs):
+    pass
 
 
 def stringify(v):
@@ -94,13 +97,22 @@ def result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
     return result
 
 
-# [[<ajat>], <taulukot per sensori>]
 def table_name(measurement_type, period_secs):
     return f"summary_{measurement_type}_{period_secs}"
 
 
-def result_matrix_from_summaries(conn, sensors, start, end, measurement_type):
-    pass
+def result_matrix_from_summaries(conn, sensors, start, end, measurement_type, window):
+    result = [[]]
+
+    for sensor in sensors:
+        result.append([])
+
+    for row in conn.execute(create_summary_sql(measurement_type, sensors, window), (start, end)):
+        result[0].append(row[0])
+        for idx, value in enumerate(row[1:]):
+            result[idx + 1].append(value)
+
+    return result
 
 
 measurement_type_matcher = re.compile(r'[a-z_]{1,20}')
@@ -120,7 +132,7 @@ def json_query(parameters, file):
         if window == 60:
             matrix = result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
         else:
-            matrix = result_matrix_from_summaries(conn, sensors, start, end, measurement_type)
+            matrix = result_matrix_from_summaries(conn, sensors, start, end, measurement_type, window)
 
         file.write(json.dumps({'data': matrix, 'sensors': sensors}).encode('utf-8'))
 
