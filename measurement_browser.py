@@ -25,6 +25,13 @@ def dict_factory(cursor, row):
     return d
 
 
+def stringify(v):
+    if v is None:
+        return 'NaN'
+    else:
+        return str(v)
+
+
 join_template = '''
 LEFT JOIN quantified_values AS {sensor_alias} ON
     {sensor_alias}.sensor = '{sensor_id}'
@@ -73,17 +80,6 @@ def create_sql(measurement_type, sensors):
     )
 
 
-def create_summary_sql(measurement_type, sensors, window_secs):
-    pass
-
-
-def stringify(v):
-    if v is None:
-        return 'NaN'
-    else:
-        return str(v)
-
-
 def result_matrix_from_measurements(conn, sensors, start, end, measurement_type):
     result = [[]]
     for sensor in sensors:
@@ -97,8 +93,29 @@ def result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
     return result
 
 
-def table_name(measurement_type, period_secs):
+def summary_table_name(measurement_type, period_secs):
     return f"summary_{measurement_type}_{period_secs}"
+
+
+summary_join_template = '''
+LEFT JOIN {table_name} AS {sensor_alias} ON
+    {sensor_alias}.sensor = '{sensor_id}'
+  AND
+    {sensor_alias}.starts_at = {table_name.starts_at}
+'''
+
+summary_query_template = '''
+SELECT
+  starts_at,
+  {cols}
+
+FROM {table_name}
+
+{joins}
+'''
+
+def create_summary_sql(measurement_type, sensors, window_secs):
+    pass
 
 
 def result_matrix_from_summaries(conn, sensors, start, end, measurement_type, window):
