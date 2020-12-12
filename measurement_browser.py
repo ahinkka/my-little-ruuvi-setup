@@ -101,21 +101,41 @@ summary_join_template = '''
 LEFT JOIN {table_name} AS {sensor_alias} ON
     {sensor_alias}.sensor = '{sensor_id}'
   AND
-    {sensor_alias}.starts_at = {table_name.starts_at}
+    s.starts_at == {sensor_alias}.starts_at
 '''
 
 summary_query_template = '''
 SELECT
-  starts_at,
+  s.starts_at,
   {cols}
 
-FROM {table_name}
-
+FROM {table_name} AS s
 {joins}
+WHERE
+  s.starts_at >= ? AND s.starts_at < ?
 '''
 
 def create_summary_sql(measurement_type, sensors, window_secs):
-    pass
+    col_template = '{sensor_alias}.mean_value'
+    table_name = summary_table_name(measurement_type, window_secs)
+    return summary_query_template.format(
+        table_name=table_name,
+        cols=',\n  '.join(
+            col_template.format(
+                sensor_alias='s' + str(idx),
+                measurement_type=measurement_type,
+            )
+            for idx, sensor in enumerate(sensors)
+        ),
+        joins=''.join(
+            summary_join_template.format(
+                table_name=table_name,
+                sensor_alias='s' + str(idx),
+                sensor_id=sensor
+            )
+            for idx, sensor in enumerate(sensors)
+        )
+    )
 
 
 def result_matrix_from_summaries(conn, sensors, start, end, measurement_type, window):
@@ -145,7 +165,6 @@ def json_query(parameters, file):
 
         sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement')))
 
-        window = 60
         if window == 60:
             matrix = result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
         else:
