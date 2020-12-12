@@ -116,7 +116,7 @@ WHERE
 '''
 
 def create_summary_sql(measurement_type, sensors, window_secs):
-    col_template = '{sensor_alias}.mean_value'
+    col_template = '{sensor_alias}.min_value, {sensor_alias}.max_value, {sensor_alias}.mean_value'
     table_name = summary_table_name(measurement_type, window_secs)
     return summary_query_template.format(
         table_name=table_name,
@@ -143,6 +143,8 @@ def result_matrix_from_summaries(conn, sensors, start, end, measurement_type, wi
 
     for sensor in sensors:
         result.append([])
+        result.append([])
+        result.append([])
 
     for row in conn.execute(create_summary_sql(measurement_type, sensors, window), (start, end)):
         result[0].append(row[0])
@@ -165,12 +167,20 @@ def json_query(parameters, file):
 
         sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement')))
 
+        summaries = False
         if window == 60:
             matrix = result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
         else:
             matrix = result_matrix_from_summaries(conn, sensors, start, end, measurement_type, window)
+            summaries = True
 
-        file.write(json.dumps({'data': matrix, 'sensors': sensors}).encode('utf-8'))
+        file.write(json.dumps(
+            {
+                'data': matrix,
+                'summaries': summaries,
+                'sensors': sensors
+            }
+        ).encode('utf-8'))
 
 
 class MeasurementHandler(SimpleHTTPRequestHandler):

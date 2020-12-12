@@ -163,9 +163,29 @@ const pressureHooksFromScaleName = (scaleName) => {
 }
 
 
-const seriesFromSensorsAndScaleName = (sensors, scaleName) => {
+const seriesFromSensorsAndScaleName = (sensors, summaries, scaleName) => {
   let colorIndex = 0
   return sensors.reduce((acc, v) => {
+    if (summaries === true) {
+      acc.push({
+	label: `Low ${v}`,
+	scale: scaleName,
+	stroke: colors[colorIndex],
+	fill: "rgba(0, 0, 0, .07)",
+	width: 0,
+	band: true
+      })
+
+      acc.push({
+	label: `High ${v}`,
+	scale: scaleName,
+	stroke: colors[colorIndex],
+	fill: "rgba(0, 0, 0, .07)",
+	width: 0,
+	band: true,
+      })
+    }
+
     acc.push({
       label: v,
       scale: scaleName,
@@ -291,12 +311,12 @@ const Nav = (props) => {
 }
 
 
-const plot = (element, measurementType, data, shouldClearElement, width, height) => {
+const plot = (element, measurementType, summaries, data, shouldClearElement, width, height) => {
   const effData = data.data
   let [scale, hooks] = scaleAndHooksForMeasurementTypeAndValues(measurementType, effData)
   console.assert(scale, 'no scale')
 
-  const series = seriesFromSensorsAndScaleName(data.sensors, scale.scale)
+  const series = seriesFromSensorsAndScaleName(data.sensors, summaries, scale.scale)
   console.assert(series, 'no series')
 
   let scales = {}
@@ -315,7 +335,9 @@ const plot = (element, measurementType, data, shouldClearElement, width, height)
   // This is kinda crude, we might be able to use the same plot object. Just
   // couldn't make it work this time.
   element.innerHTML = ''
+  // console.time('new uPlot')
   const g = new uPlot(opts, effData, element)
+  // console.timeEnd('new uPlot')
 }
 
 
@@ -346,6 +368,7 @@ const ChartWithData = (props) => {
       plot(
         element.current,
         data.measurementType,
+        data.summaries,
         data,
         data.measurementType == previousMeasurementType,
         width,
@@ -387,6 +410,7 @@ const Chart = (props) => {
       windowSecs = 86400
     }
 
+    console.time('fetch .json()')
     fetch('measurements.json' +
           `?start=${startEpoch}` +
           `&end=${endEpoch}` +
@@ -394,6 +418,7 @@ const Chart = (props) => {
           `&measurementType=${measurementType}`)
       .then((response) => response.json())
       .then((data) => {
+	console.timeEnd('fetch .json()')
 	data.measurementType = measurementType
 	setData(data)
       })
