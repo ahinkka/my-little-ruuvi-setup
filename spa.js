@@ -72,7 +72,7 @@ const scaleFromMeasurementTypeAndUnit = (measurementType, unit) => {
 
 
 const scaleForTemperature = (values) => {
-  let range = [8.0, 24.0]
+  let range = [6.0, 24.0]
   const { min, max } = minMax(values, 1)
   if (min !== null && max !== null) {
     if (min < range[0]) range = undefined
