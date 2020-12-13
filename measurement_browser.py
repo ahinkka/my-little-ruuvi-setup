@@ -154,11 +154,22 @@ def result_matrix_from_summaries(conn, sensors, start, end, measurement_type, wi
     return result
 
 
+def resolve_window(start, end):
+    period_secs = end - start
+    if period_secs < 86400:
+        return 60
+    elif period_secs < 7 * 86400:
+        return 3600
+    elif period_secs < 32 * 86400:
+        return 10800
+    else:
+        return 86400
+
+
 measurement_type_matcher = re.compile(r'[a-z_]{1,20}')
 def json_query(parameters, file):
     pd =  dict(parameters)
     start, end = int(pd['start']), int(pd['end'])
-    window = int(pd['window'])
     measurement_type = measurement_type_matcher.match(pd['measurementType']).group(0)
 
     with contextlib.closing(
@@ -167,6 +178,7 @@ def json_query(parameters, file):
 
         sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement')))
 
+        window = resolve_window(start, end)
         summaries = False
         if window == 60:
             matrix = result_matrix_from_measurements(conn, sensors, start, end, measurement_type)

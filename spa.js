@@ -400,23 +400,10 @@ const Chart = (props) => {
     const startEpoch = Math.floor(start.getTime() / 1000)
     const endEpoch = Math.floor(end.getTime() / 1000)
 
-    const periodSecs = endEpoch - startEpoch
-    let windowSecs = null
-    if (periodSecs < 86400) {
-      windowSecs = 60
-    } else if (periodSecs < 7 * 86400) {
-      windowSecs = 3600
-    } else if (periodSecs < 32 * 86400) {
-      windowSecs = 10800
-    } else {
-      windowSecs = 86400
-    }
-
     console.time('fetch .json()')
     fetch('measurements.json' +
           `?start=${startEpoch}` +
           `&end=${endEpoch}` +
-          `&window=${windowSecs}` +
           `&measurementType=${measurementType}`)
       .then((response) => response.json())
       .then((data) => {
