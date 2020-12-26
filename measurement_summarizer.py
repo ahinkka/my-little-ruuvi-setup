@@ -28,14 +28,15 @@ def create_sql(measurement_type, period_secs):
 """
 
 
-def summarize_period_containing(conn, measurement_type, period_secs, containing_epoch_secs):
+def summarize_period_containing(conn, measurement_type, period_secs, containing_epoch_secs, overwrite=False):
     period_start = containing_epoch_secs - (containing_epoch_secs % period_secs)
 
     sensors = list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement'))
 
     for sensor in sensors:
         if len(conn.execute(f'SELECT 1 FROM {table_name(measurement_type, period_secs)} WHERE starts_at = ? AND sensor = ?', (period_start, sensor)).fetchall()) == 1:
-            continue
+            if overwrite is False:
+                continue
 
         values = list(r[0] for r in conn.execute(f"SELECT {measurement_type} FROM measurement WHERE sensor = ? AND recorded_at >= ? AND recorded_at < ?", (sensor, period_start, period_start + period_secs)))
 
@@ -61,22 +62,28 @@ VALUES
         conn.commit()
 
 
-def summarize_single_period(conn, period_secs, epoch_secs_containing):
+def summarize_single_period(conn, period_secs, epoch_secs_containing, overwrite=False):
         for measurement_type in [
                 'temperature',
                 'humidity',
                 'pressure',
-                'battery_voltage',
-                'tx_power'
+                # 'battery_voltage',
+                # 'tx_power'
         ]:
             conn.execute(create_sql(measurement_type, period_secs))
-            summarize_period_containing(conn, measurement_type, period_secs, epoch_secs_containing)
+            summarize_period_containing(conn, measurement_type, period_secs, epoch_secs_containing, overwrite=overwrite)
 
 
 def summarize_latest(conn, args):
-    summarize_single_period(conn, 3600, int(time.time()))
-    summarize_single_period(conn, 10800, int(time.time()))
-    summarize_single_period(conn, 86400, int(time.time()))
+    summarize_single_period(conn, 3600, int(time.time()), overwrite=True)
+    summarize_single_period(conn, 10800, int(time.time()), overwrite=True)
+    summarize_single_period(conn, 86400, int(time.time()), overwrite=True)
+
+
+def summarize_previous(conn, args):
+    summarize_single_period(conn, 3600, int(time.time()) - 3600, overwrite=True)
+    summarize_single_period(conn, 10800, int(time.time()) - 10800, overwrite=True)
+    summarize_single_period(conn, 86400, int(time.time()) - 8600, overwrite=True)
 
 
 def summarize_since(conn, args):
@@ -128,6 +135,9 @@ if __name__ == '__main__':
     parser_a = subparsers.add_parser('summarize-latest')
     parser_a.set_defaults(func=summarize_latest)
 
+    parser_a = subparsers.add_parser('summarize-previous')
+    parser_a.set_defaults(func=summarize_previous)
+
     parser_b = subparsers.add_parser('summarize-since')
     parser_b.add_argument('since', help='start date in YYYY-MM-DD format', type=valid_date)
     parser_b.set_defaults(func=summarize_since)
@@ -140,6 +150,6 @@ if __name__ == '__main__':
         logger.setLevel(logging.DEBUG)
 
     with contextlib.closing(
-            sqlite3.connect('measurements_backup.db',
+            sqlite3.connect('measurements.db',
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
         args.func(conn, args)
