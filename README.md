@@ -18,16 +18,6 @@ TBD and other musings:
  - There's currently no old data cleanup. While there's plenty of space on the
    SD the Pi runs from, it's not exactly a safe place to store data in the
    long term.
- - Querying the data for a longer period of time than a few hours is
-   relatively slow (takes seconds to tens of seconds). This should be sped up
-   somehow. I've tried to optimize the queries but haven't found any low
-   hanging fruit after a few hours of digging around.
- - Some options to the query latency are either running the server on a
-   beefier machine, a query-optimized schema, or some other options. In any
-   case, a full-blown time-series database is something I want to avoid at all
-   costs as that adds a metric ton of dependencies and complexity, and is
-   really not in the spirit of *My Little Ruuvi Setup*. _I build and operate
-   complex systems for living, this is a fun hobby project._
 
 
 ## Components
@@ -54,6 +44,15 @@ database. The create statements describing the database schema are in the
 [collector
 repository](https://github.com/ahinkka/RuuviCollector/blob/feature/sqlite-db-connection/src/main/resources/create-tables.sql).
 
+SQLite was chosen as the storage backend as it's dead simple to operate, and
+performant enough even on a Raspberry Pi.  I used to have a setup running on a
+Pi based on InfluxDB, but at some point it just broke down due to the amount
+of data, refused to start up due to running out of memory, and I ended up
+losing the data. It might be possible to make InfluxDB run on a Raspberry Pi,
+but I have no interest in learning how to do that as I think it's generally an
+overkill for the use case. With SQLite I can keep it simple.
+
+
 ### Data visualization
 
 Measurements are visualized using a single page application (SPA) served by
@@ -61,9 +60,10 @@ the Python script in this repo. The script contains both the HTTP server to
 serve the SPA and the interface the SPA uses to request the actual measurement
 data.
 
-Measurement times are quantized to the minute during query time to have
-matching timestamps for the visualization library, but measurements have a
-more accurate timestamp in the database.
+Measurement times are quantized to the minute (or when summaries are used, to
+the summary's period) during query time to have matching timestamps between
+different sensors for the visualization library.  Measurements have an
+accurate (to the second) timestamp in the database.
 
 
 # Licensing
