@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 import contextlib
 import json
+import math
 import re
 import sqlite3
+import time
 
 from http.server import *
 from urllib.parse import urlparse, parse_qsl
@@ -146,8 +148,18 @@ def result_matrix_from_summaries(conn, sensors, start, end, measurement_type, wi
         result.append([])
         result.append([])
 
+    now_epoch_secs = math.floor(time.time())
     for row in conn.execute(create_summary_sql(measurement_type, sensors, window), (start, end)):
-        result[0].append(row[0])
+        # Generally we want to show the summary as the end of the summary as
+        # it's basically looking back and summarizing that time. For the last
+        # summary, though, as it's basically to this current time, it makes
+        # more sense to limit it to current time.
+        summary_starts_at = row[0]
+        eff_summary_end = summary_starts_at + window
+        if now_epoch_secs < eff_summary_end:
+            eff_summary_end = now_epoch_secs
+
+        result[0].append(eff_summary_end)
         for idx, value in enumerate(row[1:]):
             result[idx + 1].append(value)
 
