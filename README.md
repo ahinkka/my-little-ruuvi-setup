@@ -9,7 +9,6 @@ and create an autostart script so that both the custom RuuviCollector and
 Python script are started when the Pi boots up.
 
 TBD and other musings:
- - Add autostart script to the repo.
  - Currently everything runs on a Raspberry Pi 3B rev 1.3, but the plan is to
    set up an SCP to copy over the files to a proper server so I could access
    the data outside my home network.
@@ -66,7 +65,7 @@ different sensors for the visualization library.  Measurements have an
 accurate (to the second) timestamp in the database.
 
 
-# Licensing
+## Licensing
 
 The code directly connected to RuuviCollector is licensed under the same
 license as the original RuuviCollector, MIT.  Other parts are under GPL3.
