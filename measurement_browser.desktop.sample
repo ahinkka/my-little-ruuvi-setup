@@ -1,0 +1,5 @@
+# Drop this file into ~/.config/autostart/ dir for autostart
+[Desktop Entry]
+Type=Application
+Name=RuuviCollector
+Exec=lxterminal -e 'bash -c "python3 measurement_browser.py"'
