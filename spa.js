@@ -163,41 +163,46 @@ const pressureHooksFromScaleName = (scaleName) => {
 }
 
 
-const seriesFromSensorsAndScaleName = (sensors, summaries, scaleName) => {
-  let colorIndex = 0
+const seriesAndBandsFromSensorsAndScaleName = (sensors, summaries, scaleName) => {
+  let sensorIndex = 0
   return sensors.reduce((acc, v) => {
+    const [seriesAcc, bandsAcc] = acc
     if (summaries === true) {
-      acc.push({
+      seriesAcc.push({
 	label: `Low ${v}`,
 	scale: scaleName,
-	stroke: colors[colorIndex],
-	fill: "rgba(0, 0, 0, .07)",
-	width: 0,
-	band: true,
+	stroke: colors[sensorIndex],
+	width: 0.1,
       })
 
-      acc.push({
+      seriesAcc.push({
 	label: `High ${v}`,
 	scale: scaleName,
-	stroke: colors[colorIndex],
+	stroke: colors[sensorIndex],
+	width: 0.1,
+      })
+
+      const lowIndex = 1 + sensorIndex * 3
+      const highIndex = 1 + sensorIndex * 3 + 1
+      bandsAcc.push({
+	show: true,
+	series: [highIndex, lowIndex],
 	fill: "rgba(0, 0, 0, .07)",
-	width: 0,
-	band: true,
       })
     }
 
-    acc.push({
+    seriesAcc.push({
       label: v,
       scale: scaleName,
       // stroke: "black",
-      stroke: colors[colorIndex],
+      stroke: colors[sensorIndex],
       width: 2,
-      dash: [((sensors.length - colorIndex) + 1) * 3],
+      dash: [((sensors.length - sensorIndex) + 1) * 3],
       // spanGaps: true,
     })
-    colorIndex++
-    return acc
-  }, [{}])
+    sensorIndex++
+    return [seriesAcc, bandsAcc]
+  }, [[{}], []])
 }
 
 
@@ -318,8 +323,9 @@ const plot = (element, measurementType, summaries, data, shouldClearElement, wid
   let [scale, hooks] = scaleAndHooksForMeasurementTypeAndValues(measurementType, effData)
   console.assert(scale, 'no scale')
 
-  const series = seriesFromSensorsAndScaleName(data.sensors, summaries, scale.scale)
+  const [series, bands] = seriesAndBandsFromSensorsAndScaleName(data.sensors, summaries, scale.scale)
   console.assert(series, 'no series')
+  console.assert(bands, 'no bands')
 
   let scales = {}
   scales[scale.scale] = scale
@@ -329,10 +335,15 @@ const plot = (element, measurementType, summaries, data, shouldClearElement, wid
     width: width,
     height: height,
     series: series,
+    bands: bands,
     axes: [{}, scale],
     scales: scales,
     hooks: hooks,
   }
+
+  // console.log('effData.length', effData.length)
+  // console.log('series', series)
+  // console.log('bands', bands)
 
   // This is kinda crude, we might be able to use the same plot object. Just
   // couldn't make it work this time.
