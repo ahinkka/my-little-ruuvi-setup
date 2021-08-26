@@ -15,7 +15,8 @@ ALLOW_LIST = [
     'spa.js',
     'uPlot.min.css',
     'uPlot.iife.min.js',
-    'measurements.json'
+    'measurements.json',
+    'sensors.json'
 ]
 
 

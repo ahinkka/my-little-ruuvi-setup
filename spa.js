@@ -163,20 +163,22 @@ const pressureHooksFromScaleName = (scaleName) => {
 }
 
 
-const seriesAndBandsFromSensorsAndScaleName = (sensors, summaries, scaleName) => {
+const seriesAndBandsFromSensorsAndScaleName = (sensors, sensorConfig, summaries, scaleName) => {
   let sensorIndex = 0
   return sensors.reduce((acc, v) => {
     const [seriesAcc, bandsAcc] = acc
+    const sensorName = sensorConfig[v] ? sensorConfig[v].name : v
+
     if (summaries === true) {
       seriesAcc.push({
-	label: `Low ${v}`,
+	label: `Low ${sensorName}`,
 	scale: scaleName,
 	stroke: colors[sensorIndex],
 	width: 0.1,
       })
 
       seriesAcc.push({
-	label: `High ${v}`,
+	label: `High ${sensorName}`,
 	scale: scaleName,
 	stroke: colors[sensorIndex],
 	width: 0.1,
@@ -192,7 +194,7 @@ const seriesAndBandsFromSensorsAndScaleName = (sensors, summaries, scaleName) =>
     }
 
     seriesAcc.push({
-      label: v,
+      label: sensorName,
       scale: scaleName,
       // stroke: "black",
       stroke: colors[sensorIndex],
@@ -318,12 +320,12 @@ const Nav = (props) => {
 }
 
 
-const plot = (element, measurementType, summaries, data, shouldClearElement, width, height) => {
+const plot = (element, measurementType, summaries, data, sensorConfig, shouldClearElement, width, height) => {
   const effData = data.data
   let [scale, hooks] = scaleAndHooksForMeasurementTypeAndValues(measurementType, effData)
   console.assert(scale, 'no scale')
 
-  const [series, bands] = seriesAndBandsFromSensorsAndScaleName(data.sensors, summaries, scale.scale)
+  const [series, bands] = seriesAndBandsFromSensorsAndScaleName(data.sensors, sensorConfig, summaries, scale.scale)
   console.assert(series, 'no series')
   console.assert(bands, 'no bands')
 
@@ -355,7 +357,7 @@ const plot = (element, measurementType, summaries, data, shouldClearElement, wid
 
 
 const ChartWithData = (props) => {
-  const { data } = props
+  const { data, sensors } = props
   const [previousMeasurementType, setPreviousMeasurementType] = useState(null)
   const element = useRef(null)
   const [windowWidth, windowHeight] = useWindowSize()
@@ -383,6 +385,7 @@ const ChartWithData = (props) => {
         data.measurementType,
         data.summaries,
         data,
+        sensors,
         data.measurementType == previousMeasurementType,
         width,
         height
@@ -405,27 +408,38 @@ const ChartWithData = (props) => {
 
 const Chart = (props) => {
   const { start, end, measurementType } = props
+  const [sensors, setSensors] = useState({})
   const [data, setData] = useState(null)
+
+  useEffect(() => {
+    console.time('fetch sensors.json()')
+    fetch('sensors.json')
+      .then((response) => response.json())
+      .then((data) => {
+	console.timeEnd('fetch sensors.json()')
+	setSensors(data)
+      })
+  }, [])
 
   useEffect(() => {
     const startEpoch = Math.floor(start.getTime() / 1000)
     const endEpoch = Math.floor(end.getTime() / 1000)
 
-    console.time('fetch .json()')
+    console.time('fetch measurements.json()')
     fetch('measurements.json' +
           `?start=${startEpoch}` +
           `&end=${endEpoch}` +
           `&measurementType=${measurementType}`)
       .then((response) => response.json())
       .then((data) => {
-	console.timeEnd('fetch .json()')
+	console.timeEnd('fetch measurements.json()')
 	data.measurementType = measurementType
 	setData(data)
       })
   }, [start, end, measurementType])
 
   return h('div', {}, [
-    h(ChartWithData, { data }),
+    h(ChartWithData, { data, sensors }),
   ])
 }
 
