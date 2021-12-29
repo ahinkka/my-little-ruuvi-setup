@@ -2,4 +2,4 @@
 [Desktop Entry]
 Type=Application
 Name=RuuviCollector
-Exec=lxterminal -e 'bash -c "cd && sudo java -server -XX:+UseSerialGC -Xms80m -Xmx80m -Dsqlite.dbpath=/home/pi/measurements.db -jar ruuvi-collector-0.2-sqlite.jar"'
+Exec=lxterminal -e 'bash -c "cd && sudo java -server -XX:+UseSerialGC -XX:MetaspaceSize=16m -XX:MaxMetaspaceSize=16m -Xms64m -Xmx64m -Dsqlite.dbpath=/home/pi/measurements.db -jar ruuvi-collector-0.2-sqlite.jar"'
