@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
+import binascii
 import contextlib
 import datetime as dt
 import json
@@ -11,6 +12,11 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def extract_mac_address(obj):
+    nums = obj['mac_address']
+    return ''.join(["{0:0>2X}".format(n) for n in nums]).upper()
 
 
 def extract_temperature(obj):
@@ -40,6 +46,7 @@ def extract_battery_voltage(obj):
 
 
 async def persist(conn, obj):
+    mac_address = extract_mac_address(obj)
     recorded_at = dt.datetime.now()
 
     temperature = extract_temperature(obj)
@@ -47,7 +54,7 @@ async def persist(conn, obj):
     humidity = extract_humidity(obj)
     voltage = extract_battery_voltage(obj)
 
-    logger.info((recorded_at, temperature, pressure, humidity, voltage))
+    logger.info((mac_address, recorded_at, temperature, pressure, humidity, voltage))
 
 
 async def main(host, port):
@@ -65,13 +72,9 @@ async def main(host, port):
                     obj = json.loads(line.decode())
                     await persist(conn, obj) # should there be a timeout here as well?
 
-        except (
-                asyncio.TimeoutError,
-                json.decoder.JSONDecodeError,
-                ConnectionRefusedError
-        ) as line_handling_error:
+        except Exception as line_handling_error:
             logger.info(
-                'Encountered error line reading loop, sleeping for 5 seconds before reconnection...',
+                'Encountered error in connecting or line reading loop, sleeping for 5 seconds before reconnecting. Error: %s',
                 line_handling_error
             )
 
