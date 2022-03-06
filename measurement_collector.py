@@ -4,14 +4,35 @@ import binascii
 import contextlib
 import datetime as dt
 import json
+import logging
 import math
 import sqlite3
 import time
-import logging
+import traceback
 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def table_name(measurement_type):
+    return f'measurement_{measurement_type}'
+
+
+def create_sql(measurement_type):
+    return f'''CREATE TABLE IF NOT EXISTS {table_name(measurement_type)} (
+  recorded_at INTEGER NOT NULL,
+  sensor TEXT NOT NULL,
+  value REAL,
+  CONSTRAINT recorded_at_sensor_pk PRIMARY KEY (recorded_at, sensor)
+) WITHOUT ROWID
+'''
+
+
+def create_tables(conn):
+    for quantity in ('temperature', 'pressure', 'humidity', 'voltage'):
+        conn.execute(create_sql(quantity))
+    conn.commit()
 
 
 def extract_mac_address(obj):
@@ -57,7 +78,17 @@ async def persist(conn, obj):
     humidity = extract_humidity(obj)
     voltage = extract_battery_voltage(obj)
 
-    logger.info((mac_address, recorded_at, temperature, pressure, humidity, voltage))
+    for quantity in ('temperature', 'pressure', 'humidity', 'voltage'):
+        conn.execute(f'''
+INSERT OR REPLACE INTO {table_name(quantity)}
+  (recorded_at, sensor, value)
+VALUES
+  (?, ?, ?)''', (
+      recorded_at,
+      mac_address,
+      locals()[quantity]
+  ))
+    conn.commit()
 
 
 async def main(host, port):
@@ -68,6 +99,7 @@ async def main(host, port):
             with contextlib.closing(
                     sqlite3.connect('measurements.db',
                                     detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
+                create_tables(conn)
 
                 while True: # receive lines
                     line = await asyncio.wait_for(reader.readline(), 120) # await for 120 seconds
@@ -76,6 +108,7 @@ async def main(host, port):
                     await persist(conn, obj) # should there be a timeout here as well?
 
         except Exception as line_handling_error:
+            traceback.print_exc()
             logger.info(
                 'Encountered error in connecting or line reading loop, sleeping for 5 seconds before reconnecting. Error: %s',
                 line_handling_error
