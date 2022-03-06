@@ -35,7 +35,10 @@ def extract_pressure(obj):
 
 
 def extract_humidity(obj):
-    return obj.get('humidity_as_ppm', None)
+    value = obj.get('humidity_as_ppm', None)
+    if value:
+        value = value / 10000.0
+    return value
 
 
 def extract_battery_voltage(obj):
