@@ -79,15 +79,28 @@ async def persist(conn, obj):
     voltage = extract_battery_voltage(obj)
 
     for quantity in ('temperature', 'pressure', 'humidity', 'voltage'):
-        conn.execute(f'''
-INSERT OR REPLACE INTO {table_name(quantity)}
-  (recorded_at, sensor, value)
-VALUES
-  (?, ?, ?)''', (
-      recorded_at,
-      mac_address,
-      locals()[quantity]
-  ))
+        value = locals()[quantity]
+        cur = conn.cursor()
+        rows = list(cur.execute(f'''SELECT recorded_at, value FROM {table_name(quantity)}
+                                    WHERE sensor = ?
+                                    ORDER BY recorded_at DESC LIMIT 1''',
+                                (mac_address,)))
+        if len(rows) > 0:
+            last_recorded_at, last_value = list(rows)[0]
+            last_recorded_at_dt = dt.datetime.fromisoformat(last_recorded_at)
+
+            if (recorded_at - last_recorded_at_dt < dt.timedelta(hours=1) and
+                last_value == value):
+                logger.debug(f'Delete previous {quantity} for sensor {mac_address}')
+                conn.execute(f'''DELETE FROM {table_name(quantity)}
+                                 WHERE recorded_at = ? AND sensor = ?''',
+                             (last_recorded_at_dt, mac_address))
+
+        conn.execute(f'''INSERT OR REPLACE INTO {table_name(quantity)}
+                                (recorded_at, sensor, value)
+                         VALUES
+                                (?, ?, ?)''',
+                     (recorded_at, mac_address, value))
     conn.commit()
 
 
