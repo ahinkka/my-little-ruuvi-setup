@@ -69,6 +69,14 @@ def extract_battery_voltage(obj):
     return value
 
 
+QUANTITY_CHANGE_THRESHOLD = {
+    'temperature': 0.02,
+    'pressure': 0.03,
+    'humidity': 0.1,
+    'voltage': 0.05
+}
+
+
 async def persist(conn, obj):
     mac_address = extract_mac_address(obj)
     recorded_at = dt.datetime.now()
@@ -88,9 +96,11 @@ async def persist(conn, obj):
         if len(rows) > 0:
             last_recorded_at, last_value = list(rows)[0]
             last_recorded_at_dt = dt.datetime.fromisoformat(last_recorded_at)
+            time_since_last = recorded_at - last_recorded_at_dt
 
-            if (recorded_at - last_recorded_at_dt < dt.timedelta(hours=1) and
-                last_value == value):
+            if (time_since_last < dt.timedelta(hours=1) and
+                math.isclose(last_value, value,
+                             rel_tol=QUANTITY_CHANGE_THRESHOLD[quantity])):
                 logger.debug(f'Delete previous {quantity} for sensor {mac_address}')
                 conn.execute(f'''DELETE FROM {table_name(quantity)}
                                  WHERE recorded_at = ? AND sensor = ?''',
