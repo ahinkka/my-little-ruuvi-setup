@@ -23,25 +23,13 @@ TBD and other musings:
 
 ### Measurement collection
 
-*RuuviCollector* by is used for collecting measurements from the sensors.
-
-See my [fork](https://github.com/ahinkka/RuuviCollector/) and the branch
-[feature/sqlite-db-connection](
-https://github.com/ahinkka/RuuviCollector/tree/feature/sqlite-db-connection)
-for details.
-
-With some packaging work I should be able to build a JAR that could use the
-bog standard [RuuviCollector](https://github.com/Scrin/RuuviCollector), but I
-haven't put the time into that yet as I'm kind of evaluating how it still
-works and I'm not sure how stable of an interface is it that I'm using.
+[*ruuvitag-jsonl-socket-bridge*](https://github.com/ahinkka/ruuvitag-jsonl-socket-bridge)
+by is used for collecting measurements from the sensors.
 
 
 ### Data management
 
-The custom RuuviCollector stores the observations into an SQLite3
-database. The create statements describing the database schema are in the
-[collector
-repository](https://github.com/ahinkka/RuuviCollector/blob/feature/sqlite-db-connection/src/main/resources/create-tables.sql).
+*measurement_collector.py* stores the observations into an SQLite3
 
 SQLite was chosen as the storage backend as it's dead simple to operate, and
 performant enough even on a Raspberry Pi.  I used to have a setup running on a
@@ -55,14 +43,13 @@ overkill for the use case. With SQLite I can keep it simple.
 ### Data visualization
 
 Measurements are visualized using a single page application (SPA) served by
-the Python script in this repo. The script contains both the HTTP server to
-serve the SPA and the interface the SPA uses to request the actual measurement
-data.
+*measurement_browser.py*. The script contains both the HTTP server to serve
+the SPA and the interface the SPA uses to request the actual measurement data.
 
 Measurement times are quantized to the minute (or when summaries are used, to
 the summary's period) during query time to have matching timestamps between
 different sensors for the visualization library.  Measurements have an
-accurate (to the second) timestamp in the database.
+accurate timestamp in the database.
 
 
 ## Licensing
