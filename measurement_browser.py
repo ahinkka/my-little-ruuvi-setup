@@ -5,6 +5,7 @@ import math
 import re
 import sqlite3
 import time
+import datetime as dt
 
 from http.server import *
 from urllib.parse import urlparse, parse_qsl
@@ -35,63 +36,45 @@ def stringify(v):
         return str(v)
 
 
-join_template = '''
-LEFT JOIN quantified_values AS {sensor_alias} ON
-    {sensor_alias}.sensor = '{sensor_id}'
-  AND
-    {sensor_alias}.recorded_at = quantified_values.recorded_at
-'''
-
-query_template = '''
-WITH
-  quantified_values AS (
-    SELECT CAST((recorded_at / 60) AS INTEGER) * 60 AS recorded_at, sensor, {measurement_type}
-    FROM measurement
-    WHERE recorded_at >= ? AND recorded_at < ?
-    GROUP BY CAST((recorded_at / 60) AS INTEGER) * 60, sensor
-  )
-
-SELECT DISTINCT
-  quantified_values.recorded_at,
-  {cols}
-
-FROM quantified_values
-
-{joins}
-'''
-
-
-def create_sql(measurement_type, sensors):
-    col_template = '{sensor_alias}.{measurement_type}'
-
-    return query_template.format(
-        measurement_type=measurement_type,
-        cols=',\n  '.join(
-            col_template.format(
-                sensor_alias='s' + str(idx),
-                measurement_type=measurement_type,
-            )
-            for idx, sensor in enumerate(sensors)
-        ),
-        joins=''.join(
-            join_template.format(
-                sensor_alias='s' + str(idx),
-                sensor_id=sensor
-            )
-            for idx, sensor in enumerate(sensors)
-        )
-    )
+def round_to_minute(dt_):
+    return dt_.replace(second=0, microsecond=0, minute=dt_.minute, hour=dt_.hour)
 
 
 def result_matrix_from_measurements(conn, sensors, start, end, measurement_type):
-    result = [[]]
-    for sensor in sensors:
-        result.append([])
+    start_dt = dt.datetime.fromtimestamp(start)
+    end_dt = dt.datetime.fromtimestamp(end)
 
-    for row in conn.execute(create_sql(measurement_type, sensors), (start, end)):
-        result[0].append(row[0])
-        for idx, value in enumerate(row[1:]):
-            result[idx + 1].append(value)
+    dts = sorted(list(set([round_to_minute(dt.datetime.fromisoformat(dt_[0]))
+           for dt_ in list(conn.execute(
+        f'''SELECT recorded_at
+            FROM measurement_{measurement_type}
+            WHERE recorded_at >= ? AND
+            recorded_at < ?''',
+        (start_dt, end_dt)))])))
+
+    # int(_dt.timestamp())
+    result = [[int(_dt.timestamp()) for _dt in dts]]
+
+    sensor_values = {}
+    for sensor in sensors:
+        for row in conn.execute(f'''SELECT recorded_at, value
+                                    FROM measurement_{measurement_type}
+                                    WHERE sensor = ? AND
+                                          recorded_at >= ? AND
+                                          recorded_at < ?
+                                    ORDER BY recorded_at ASC
+                                 ''', (sensor, start_dt, end_dt)):
+            recorded_at, value = row
+            recorded_at_dt = round_to_minute(dt.datetime.fromisoformat(recorded_at))
+            sensor_values[f'{sensor}, {recorded_at_dt.timestamp()}'] = value
+
+    for sensor in sensors:
+        sensor_row = []
+        for dt_ in dts:
+            sensor_row.append(
+                sensor_values.get(f'{sensor}, {dt_.timestamp()}', None)
+            )
+        result.append(sensor_row)
 
     return result
 
@@ -189,11 +172,11 @@ def json_query(parameters, file):
             sqlite3.connect('measurements.db',
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
 
-        sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement')))
+        sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM sensor')))
 
         window = resolve_window(start, end)
         summaries = False
-        if window == 60:
+        if window < 86400:
             matrix = result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
         else:
             matrix = result_matrix_from_summaries(conn, sensors, start, end, measurement_type, window)
