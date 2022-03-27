@@ -1,5 +1,0 @@
-# Drop this file into ~/.config/autostart/ dir for autostart
-[Desktop Entry]
-Type=Application
-Name=RuuviCollector
-Exec=lxterminal -e 'bash -c "cd && sudo java -server -XX:+UseSerialGC -XX:MetaspaceSize=10m -XX:MaxMetaspaceSize=10m -Xms48m -Xmx48m -Dsqlite.dbpath=/home/pi/measurements.db -jar ruuvi-collector-0.2-sqlite.jar"'
