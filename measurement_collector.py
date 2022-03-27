@@ -32,6 +32,11 @@ def create_sql(measurement_type):
 def create_tables(conn):
     for quantity in ('temperature', 'pressure', 'humidity', 'voltage'):
         conn.execute(create_sql(quantity))
+    conn.execute('''CREATE TABLE IF NOT EXISTS sensor (
+                        sensor TEXT NOT NULL,
+                        last_seen_at INTEGER NOT NULL,
+                        CONSTRAINT sensor_pk PRIMARY KEY (sensor)
+                    )''')
     conn.commit()
 
 
@@ -80,6 +85,10 @@ QUANTITY_CHANGE_THRESHOLD = {
 async def persist(conn, obj):
     mac_address = extract_mac_address(obj)
     recorded_at = dt.datetime.now()
+
+    conn.execute(f'''INSERT OR REPLACE INTO sensor (sensor, last_seen_at)
+                     VALUES (?, ?)''',
+                     (mac_address, recorded_at))
 
     temperature = extract_temperature(obj)
     pressure = extract_pressure(obj)
