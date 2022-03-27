@@ -176,11 +176,11 @@ def json_query(parameters, file):
 
         window = resolve_window(start, end)
         summaries = False
-        if window < 86400:
-            matrix = result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
-        else:
-            matrix = result_matrix_from_summaries(conn, sensors, start, end, measurement_type, window)
-            summaries = True
+        # if window < 86400:
+        matrix = result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
+        # else:
+        #     matrix = result_matrix_from_summaries(conn, sensors, start, end, measurement_type, window)
+        #     summaries = True
 
         file.write(json.dumps(
             {
