@@ -200,7 +200,7 @@ const seriesAndBandsFromSensorsAndScaleName = (sensors, sensorConfig, summaries,
       stroke: colors[sensorIndex],
       width: 2,
       dash: [((sensors.length - sensorIndex) + 1) * 3],
-      // spanGaps: true,
+      spanGaps: true,
     })
     sensorIndex++
     return [seriesAcc, bandsAcc]

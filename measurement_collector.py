@@ -100,14 +100,19 @@ async def persist(conn, obj):
         cur = conn.cursor()
         rows = list(cur.execute(f'''SELECT recorded_at, value FROM {table_name(quantity)}
                                     WHERE sensor = ?
-                                    ORDER BY recorded_at DESC LIMIT 1''',
+                                    ORDER BY recorded_at DESC LIMIT 2''',
                                 (mac_address,)))
-        if len(rows) > 0:
+        if len(rows) == 2:
             last_recorded_at, last_value = list(rows)[0]
             last_recorded_at_dt = dt.datetime.fromisoformat(last_recorded_at)
+            second_to_last_recorded_at, second_to_last_value = list(rows)[1]
+            second_to_last_recorded_at_dt = dt.datetime.fromisoformat(second_to_last_recorded_at)
+
+            time_between = last_recorded_at_dt - second_to_last_recorded_at_dt
             time_since_last = recorded_at - last_recorded_at_dt
 
-            if (time_since_last < dt.timedelta(hours=1) and
+            if (time_between < dt.timedelta(hours=1) and
+                time_since_last < dt.timedelta(hours=1) and
                 math.isclose(last_value, value,
                              rel_tol=QUANTITY_CHANGE_THRESHOLD[quantity])):
                 logger.debug(f'Delete previous {quantity} for sensor {mac_address}')
