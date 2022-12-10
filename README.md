@@ -4,9 +4,9 @@ I.e. how I record and display the measurements collected from the excellent
 Ruuvi sensors.
 
 The main design driver for this project is that I want something *dirt simple*
-and *easy to maintain*. Currently it requires one to copy four files to the Pi
-and create an autostart script so that both the custom RuuviCollector and
-Python script are started when the Pi boots up.
+and *easy to maintain*. Currently it requires one to just copy a bunch of
+files and create an autostart script so that both everything works on a
+Raspberry Pi.
 
 TBD and other musings:
  - Currently everything runs on a Raspberry Pi 3B rev 1.3, but the plan is to
@@ -24,7 +24,7 @@ TBD and other musings:
 ### Measurement collection
 
 [*ruuvitag-jsonl-socket-bridge*](https://github.com/ahinkka/ruuvitag-jsonl-socket-bridge)
-by is used for collecting measurements from the sensors.
+is used for collecting measurements from the sensors.
 
 
 ### Data management
@@ -54,5 +54,4 @@ accurate timestamp in the database.
 
 ## Licensing
 
-The code directly connected to RuuviCollector is licensed under the same
-license as the original RuuviCollector, MIT.  Other parts are under GPL3.
+This piece of software is licensed under GPLv3.
