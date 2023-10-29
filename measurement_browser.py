@@ -57,7 +57,7 @@ def result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
 
     sensor_values = {}
     for sensor in sensors:
-        for row in conn.execute(f'''SELECT recorded_at, value
+        for row in conn.execute(f'''SELECT recorded_at, median AS value
                                     FROM measurement_{measurement_type}
                                     WHERE sensor = ? AND
                                           recorded_at >= ? AND

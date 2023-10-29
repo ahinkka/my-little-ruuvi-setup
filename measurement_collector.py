@@ -5,10 +5,10 @@ import contextlib
 import datetime as dt
 import json
 import logging
-import math
+import statistics
 import sqlite3
-import time
 import traceback
+from dataclasses import dataclass
 
 
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +23,10 @@ def create_sql(measurement_type):
     return f'''CREATE TABLE IF NOT EXISTS {table_name(measurement_type)} (
   recorded_at INTEGER NOT NULL,
   sensor TEXT NOT NULL,
-  value REAL,
+  minimum REAL,
+  maximum REAL,
+  median REAL,
+  mean REAL,
   CONSTRAINT recorded_at_sensor_pk PRIMARY KEY (recorded_at, sensor)
 ) WITHOUT ROWID
 '''
@@ -74,15 +77,13 @@ def extract_battery_voltage(obj):
     return value
 
 
-QUANTITY_CHANGE_THRESHOLD = {
-    'temperature': 0.02,
-    'pressure': 0.03,
-    'humidity': 0.1,
-    'voltage': 0.05
-}
+@dataclass
+class Measurement:
+    recorded_at: dt.datetime
+    value: float
 
 
-async def persist(conn, obj):
+async def handle(conn, obj, state):
     mac_address = extract_mac_address(obj)
     recorded_at = dt.datetime.now()
 
@@ -96,39 +97,54 @@ async def persist(conn, obj):
     voltage = extract_battery_voltage(obj)
 
     for quantity in ('temperature', 'pressure', 'humidity', 'voltage'):
-        value = locals()[quantity]
-        cur = conn.cursor()
-        rows = list(cur.execute(f'''SELECT recorded_at, value FROM {table_name(quantity)}
-                                    WHERE sensor = ?
-                                    ORDER BY recorded_at DESC LIMIT 2''',
-                                (mac_address,)))
-        if len(rows) == 2:
-            last_recorded_at, last_value = list(rows)[0]
-            last_recorded_at_dt = dt.datetime.fromisoformat(last_recorded_at)
-            second_to_last_recorded_at, second_to_last_value = list(rows)[1]
-            second_to_last_recorded_at_dt = dt.datetime.fromisoformat(second_to_last_recorded_at)
+        current = Measurement(
+            recorded_at,
+            value = locals()[quantity]
+        )
 
-            time_between = last_recorded_at_dt - second_to_last_recorded_at_dt
-            time_since_last = recorded_at - last_recorded_at_dt
+        if mac_address not in state:
+            state[mac_address] = {}
+        if quantity not in state[mac_address]:
+            state[mac_address][quantity] = []
 
-            if (time_between < dt.timedelta(hours=1) and
-                time_since_last < dt.timedelta(hours=1) and
-                math.isclose(last_value, value,
-                             rel_tol=QUANTITY_CHANGE_THRESHOLD[quantity])):
-                logger.debug(f'Delete previous {quantity} for sensor {mac_address}')
-                conn.execute(f'''DELETE FROM {table_name(quantity)}
-                                 WHERE recorded_at = ? AND sensor = ?''',
-                             (last_recorded_at_dt, mac_address))
+        preceding_measurements = state[mac_address][quantity]
+        previous = next(reversed(preceding_measurements), None)
 
-        conn.execute(f'''INSERT OR REPLACE INTO {table_name(quantity)}
-                                (recorded_at, sensor, value)
-                         VALUES
-                                (?, ?, ?)''',
-                     (recorded_at, mac_address, value))
+        # logger.info('current', current)
+        # logger.info('previous', previous)
+        preceding_measurements.append(current)
+
+        # if previous and previous.recorded_at.minute != current.recorded_at.minute:
+        if previous and previous.recorded_at.hour != current.recorded_at.hour:
+            # logger.info('hour changed')
+            # logger.info(preceding_measurements)
+            if len(preceding_measurements) > 0:
+                values = [m.value for m in preceding_measurements]
+                min_value = min(values)
+                max_value = max(values)
+                median_value = statistics.median(values)
+                mean_value = statistics.mean(values)
+                conn.execute(f'''
+                    INSERT OR REPLACE INTO {table_name(quantity)}
+                      (recorded_at, sensor, minimum, maximum, median, mean)
+                    VALUES
+                      (?, ?, ?, ?, ?, ?)
+                ''', (
+                    previous.recorded_at,
+                    mac_address,
+                    min_value,
+                    max_value,
+                    median_value,
+                    mean_value
+                ))
+            state[mac_address][quantity] = []
+
     conn.commit()
 
 
 async def main(host, port):
+    state = {}
+
     while True: # maintain connection
         try:
             reader, writer = await asyncio.open_connection(host, port)
@@ -142,7 +158,7 @@ async def main(host, port):
                     line = await asyncio.wait_for(reader.readline(), 120) # await for 120 seconds
                     logger.debug(f'Received: {line.decode()!r}')
                     obj = json.loads(line.decode())
-                    await persist(conn, obj) # should there be a timeout here as well?
+                    await handle(conn, obj, state) # should there be a timeout here as well?
 
         except Exception as line_handling_error:
             traceback.print_exc()
