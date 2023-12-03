@@ -1,5 +1,0 @@
-# Drop this file into ~/.config/autostart/ dir for autostart
-[Desktop Entry]
-Type=Application
-Name=measurement_browser.py
-Exec=lxterminal -e 'bash -c "python3 measurement_browser.py"'

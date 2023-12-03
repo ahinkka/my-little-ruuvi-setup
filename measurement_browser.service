@@ -1,0 +1,8 @@
+[Unit]
+Description=Measurement Browser
+
+[Service]
+ExecStart=python3 /home/pi/measurement_browser.py
+
+[Install]
+WantedBy=default.target

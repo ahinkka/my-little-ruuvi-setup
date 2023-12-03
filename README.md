@@ -52,6 +52,30 @@ different sensors for the visualization library.  Measurements have an
 accurate timestamp in the database.
 
 
+## Installation incantations
+
+```
+loginctl enable-linger
+mkdir -p ~/.config/systemd/user/
+# scp .service files into that dir
+systemctl --user enable measurement_collector.service
+systemctl --user enable measurement_browser.service
+systemctl --user start measurement_collector
+systemctl --user start measurement_browser
+systemctl --user status
+
+# If you make changes to service files to e.g. enable debug logging, the
+# following will take care of that:
+systemctl --user daemon-reload
+systemctl --user restart measurement_collector
+systemctl --user restart measurement_browser
+
+# To access the logs of the services:
+journalctl --user -u measurement_collector
+journalctl --user -u measurement_browser
+```
+
+
 ## Licensing
 
 This piece of software is licensed under GPLv3.
