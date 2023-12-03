@@ -119,7 +119,7 @@ async def handle(conn, obj, state):
             # logger.info('hour changed')
             # logger.info(preceding_measurements)
             if len(preceding_measurements) > 0:
-                values = [m.value for m in preceding_measurements]
+                values = [m.value for m in preceding_measurements][:-1]
                 min_value = min(values)
                 max_value = max(values)
                 median_value = statistics.median(values)
@@ -137,7 +137,7 @@ async def handle(conn, obj, state):
                     median_value,
                     mean_value
                 ))
-            state[mac_address][quantity] = []
+            state[mac_address][quantity] = state[mac_address][quantity][-1:]
 
     conn.commit()
 
