@@ -40,6 +40,12 @@ but I have no interest in learning how to do that as I think it's generally an
 overkill for the use case. With SQLite I can keep it simple.
 
 
+### Recent data buffering and access
+
+*measurement_buffer.py* maintains an in-memory buffer of recent temperature and
+humidity measurements for the past hour, accessible via HTTP on port 22223.
+
+
 ### Data visualization
 
 Measurements are visualized using a single page application (SPA) served by
@@ -60,8 +66,10 @@ mkdir -p ~/.config/systemd/user/
 # scp .service files into that dir
 systemctl --user enable measurement_collector.service
 systemctl --user enable measurement_browser.service
+systemctl --user enable measurement_buffer.service
 systemctl --user start measurement_collector
 systemctl --user start measurement_browser
+systemctl --user start measurement_buffer
 systemctl --user status
 
 # If you make changes to service files to e.g. enable debug logging, the
@@ -69,10 +77,12 @@ systemctl --user status
 systemctl --user daemon-reload
 systemctl --user restart measurement_collector
 systemctl --user restart measurement_browser
+systemctl --user restart measurement_buffer
 
 # To access the logs of the services:
 journalctl --user -u measurement_collector
 journalctl --user -u measurement_browser
+journalctl --user -u measurement_buffer
 ```
 
 

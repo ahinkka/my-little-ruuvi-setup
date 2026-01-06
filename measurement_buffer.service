@@ -1,0 +1,8 @@
+[Unit]
+Description=Measurement Buffer
+
+[Service]
+ExecStart=python3 /home/pi/measurement_buffer.py
+
+[Install]
+WantedBy=default.target
