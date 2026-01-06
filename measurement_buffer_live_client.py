@@ -35,6 +35,8 @@ def parse_args():
                         help='HTTP port of measurement_buffer.py (default: 22223)')
     parser.add_argument('--mode', default='temperature', choices=['temperature', 'humidity'],
                         help='Initial display mode (default: temperature)')
+    parser.add_argument('--sensors-file', default='sensors.json',
+                        help='Path to JSON file mapping sensor MACs to names (default: sensors.json)')
     return parser.parse_args()
 
 
@@ -46,6 +48,19 @@ def fetch_measurements(hostname, port):
             return json.loads(response.read().decode('utf-8'))
     except (URLError, json.JSONDecodeError, TimeoutError) as e:
         return None
+
+
+def load_sensor_names(path):
+    """Load sensor name mappings from a JSON file."""
+    if not path:
+        return {}
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        # Extract name from each sensor entry
+        return {mac: info.get('name', mac) for mac, info in data.items()}
+    except (FileNotFoundError, json.JSONDecodeError, IOError):
+        return {}
 
 
 def linear_regression_slope(times, values):
@@ -172,9 +187,12 @@ def clear_screen():
     sys.stdout.flush()
 
 
-def render_display(stats, mode, hostname, port, error=None):
+def render_display(stats, mode, hostname, port, sensor_names=None, error=None):
     """Render the statistics display."""
     clear_screen()
+
+    if sensor_names is None:
+        sensor_names = {}
 
     mode_display = 'Temperature' if mode == 'temperature' else 'Humidity'
     unit_hint = '°C/hour' if mode == 'temperature' else '%/hour'
@@ -200,9 +218,13 @@ def render_display(stats, mode, hostname, port, error=None):
     print(header)
     print(f'{DIM}{"─" * 90}{RESET}')
 
-    # Table rows
-    for sensor in sorted(stats.keys()):
+    # Table rows - sort by display name
+    def sort_key(mac):
+        return sensor_names.get(mac, mac)
+
+    for sensor in sorted(stats.keys(), key=sort_key):
         s = stats[sensor]
+        display_name = sensor_names.get(sensor, sensor)
         latest = format_value(s['latest'], mode)
         min_val = format_value(s['min'], mode)
         max_val = format_value(s['max'], mode)
@@ -212,7 +234,7 @@ def render_display(stats, mode, hostname, port, error=None):
         trend_5m = format_trend(s['trend_5m'])
         trend_1m = format_trend(s['trend_1m'])
 
-        print(f'{WHITE}{sensor:<12}{RESET}  {CYAN}{latest}{RESET}  {min_val}  {max_val}  {median_val}  {avg_val}  {trend_1h}  {trend_5m}  {trend_1m}')
+        print(f'{WHITE}{display_name:<12}{RESET}  {CYAN}{latest}{RESET}  {min_val}  {max_val}  {median_val}  {avg_val}  {trend_1h}  {trend_5m}  {trend_1m}')
 
     print()
     print(f'{DIM}Trends are in {unit_hint}{RESET}')
@@ -254,6 +276,7 @@ def main():
     mode = args.mode
     hostname = args.hostname
     port = args.port
+    sensor_names = load_sensor_names(args.sensors_file)
 
     terminal = TerminalHandler()
     terminal.setup()
@@ -263,10 +286,10 @@ def main():
             # Fetch and display
             data = fetch_measurements(hostname, port)
             if data is None:
-                render_display({}, mode, hostname, port, error='Failed to connect to server')
+                render_display({}, mode, hostname, port, sensor_names, error='Failed to connect to server')
             else:
                 stats = compute_statistics(data, mode)
-                render_display(stats, mode, hostname, port)
+                render_display(stats, mode, hostname, port, sensor_names)
 
             # Wait for keyboard input or timeout
             key = terminal.get_key(5.0)
