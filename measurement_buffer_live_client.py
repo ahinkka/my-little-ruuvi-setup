@@ -17,12 +17,27 @@ from datetime import datetime
 RESET = '\033[0m'
 BOLD = '\033[1m'
 DIM = '\033[2m'
+UNDERLINE = '\033[4m'
 BLUE = '\033[34m'
 GREEN = '\033[32m'
 YELLOW = '\033[33m'
 CYAN = '\033[36m'
 WHITE = '\033[37m'
 MAGENTA = '\033[35m'
+
+# Sortable columns: (key, header_text, width, is_right_aligned)
+# Width must be >= len(header_text) to fit indicator
+SORT_COLUMNS = [
+    ('name', 'Sensor', 12, False),
+    ('latest', 'Latest', 7, True),
+    ('min', 'Min', 7, True),
+    ('max', 'Max', 7, True),
+    ('median', 'Median', 7, True),
+    ('avg', 'Avg', 7, True),
+    ('trend_1h', '1h', 7, True),
+    ('trend_5m', '5m', 7, True),
+    ('trend_1m', '1m', 7, True),
+]
 
 
 def parse_args():
@@ -153,20 +168,22 @@ def compute_statistics(data, mode):
     return stats
 
 
-def format_value(value, mode):
+def format_value(value, mode, width=9):
     """Format a measurement value with unit."""
     if value is None:
-        return '   -  '
-    if mode == 'temperature':
-        return f'{value:5.1f}°'
+        text = '-'
+    elif mode == 'temperature':
+        text = f'{value:.1f}°'
     else:
-        return f'{value:5.1f}%'
+        text = f'{value:.1f}%'
+    return f'{text:>{width}}'
 
 
-def format_trend(value):
+def format_trend(value, width=9):
     """Format a trend value with color."""
     if value is None:
-        return f'{DIM}     -{RESET}'
+        text = f'{"-":>{width}}'
+        return f'{DIM}{text}{RESET}'
 
     if value > 0.05:
         color = GREEN
@@ -178,7 +195,8 @@ def format_trend(value):
         color = WHITE
         sign = '+' if value >= 0 else ''
 
-    return f'{color}{sign}{value:5.2f}{RESET}'
+    text = f'{sign}{value:.2f}'
+    return f'{color}{text:>{width}}{RESET}'
 
 
 def clear_screen():
@@ -187,7 +205,7 @@ def clear_screen():
     sys.stdout.flush()
 
 
-def render_display(stats, mode, hostname, port, sensor_names=None, error=None):
+def render_display(stats, mode, hostname, port, sensor_names=None, sort_column=0, sort_reverse=False, error=None):
     """Render the statistics display."""
     clear_screen()
 
@@ -200,7 +218,7 @@ def render_display(stats, mode, hostname, port, sensor_names=None, error=None):
     # Header
     print(f'{BOLD}{CYAN}measurement_buffer_live_client{RESET} - {BOLD}{mode_display}{RESET}')
     print(f'{DIM}Connected to {hostname}:{port}{RESET}')
-    print(f'{DIM}Press {WHITE}t{DIM} for temperature, {WHITE}h{DIM} for humidity, {WHITE}q{DIM} to quit{RESET}')
+    print(f'{DIM}Press {WHITE}t{DIM}/{WHITE}h{DIM} mode, {WHITE}<{DIM}/{WHITE}>{DIM} sort column, {WHITE}R{DIM} reverse, {WHITE}q{DIM} quit{RESET}')
     print(f'{DIM}Updated: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}{RESET}')
     print()
 
@@ -213,16 +231,43 @@ def render_display(stats, mode, hostname, port, sensor_names=None, error=None):
         print(f'{DIM}Waiting for data...{RESET}')
         return
 
-    # Table header
-    header = f'{BLUE}{"Sensor":<12}  {"Latest":>6}  {"Min":>6}  {"Max":>6}  {"Median":>6}  {"Avg":>6}  {"1h":>6}  {"5m":>6}  {"1m":>6}{RESET}'
-    print(header)
-    print(f'{DIM}{"─" * 90}{RESET}')
+    # Build table header with sort indicator
+    # ▼ = descending (high to low), ▲ = ascending (low to high)
+    sort_indicator = '▼' if sort_reverse else '▲'
+    header_parts = []
+    for i, (key, text, width, right_align) in enumerate(SORT_COLUMNS):
+        indicator = sort_indicator if i == sort_column else ' '
+        color = f'{BOLD}{CYAN}' if i == sort_column else BLUE
+        col_width = width + 2
+        # Left-aligned: indicator on right ("Sensor ▲")
+        # Right-aligned: indicator on left ("▲ Latest")
+        if right_align:
+            text_with_ind = f'{indicator} {text}'
+            col_text = f'{color}{text_with_ind:>{col_width}}{RESET}'
+        else:
+            text_with_ind = f'{text} {indicator}'
+            col_text = f'{color}{text_with_ind:<{col_width}}{RESET}'
+        header_parts.append(col_text)
+    print(''.join(header_parts))
+    print(f'{DIM}{"─" * 95}{RESET}')
 
-    # Table rows - sort by display name
-    def sort_key(mac):
-        return sensor_names.get(mac, mac)
+    # Build sort key function
+    sort_key_name = SORT_COLUMNS[sort_column][0]
 
-    for sensor in sorted(stats.keys(), key=sort_key):
+    def get_sort_value(mac):
+        if sort_key_name == 'name':
+            return sensor_names.get(mac, mac).lower()
+        else:
+            val = stats[mac].get(sort_key_name)
+            # Handle None values - put them at the end
+            if val is None:
+                return float('-inf') if sort_reverse else float('inf')
+            return val
+
+    sorted_sensors = sorted(stats.keys(), key=get_sort_value, reverse=sort_reverse)
+
+    # Table rows - use width+2 to match header (accounts for indicator space)
+    for sensor in sorted_sensors:
         s = stats[sensor]
         display_name = sensor_names.get(sensor, sensor)
         latest = format_value(s['latest'], mode)
@@ -234,7 +279,7 @@ def render_display(stats, mode, hostname, port, sensor_names=None, error=None):
         trend_5m = format_trend(s['trend_5m'])
         trend_1m = format_trend(s['trend_1m'])
 
-        print(f'{WHITE}{display_name:<12}{RESET}  {CYAN}{latest}{RESET}  {min_val}  {max_val}  {median_val}  {avg_val}  {trend_1h}  {trend_5m}  {trend_1m}')
+        print(f'{WHITE}{display_name:<14}{RESET}{CYAN}{latest}{RESET}{min_val}{max_val}{median_val}{avg_val}{trend_1h}{trend_5m}{trend_1m}')
 
     print()
     print(f'{DIM}Trends are in {unit_hint}{RESET}')
@@ -277,6 +322,8 @@ def main():
     hostname = args.hostname
     port = args.port
     sensor_names = load_sensor_names(args.sensors_file)
+    sort_column = 0
+    sort_reverse = False
 
     terminal = TerminalHandler()
     terminal.setup()
@@ -286,10 +333,10 @@ def main():
             # Fetch and display
             data = fetch_measurements(hostname, port)
             if data is None:
-                render_display({}, mode, hostname, port, sensor_names, error='Failed to connect to server')
+                render_display({}, mode, hostname, port, sensor_names, sort_column, sort_reverse, error='Failed to connect to server')
             else:
                 stats = compute_statistics(data, mode)
-                render_display(stats, mode, hostname, port, sensor_names)
+                render_display(stats, mode, hostname, port, sensor_names, sort_column, sort_reverse)
 
             # Wait for keyboard input or timeout
             key = terminal.get_key(5.0)
@@ -301,6 +348,12 @@ def main():
                     mode = 'temperature'
                 elif key.lower() == 'h':
                     mode = 'humidity'
+                elif key == '<' or key == ',':
+                    sort_column = (sort_column - 1) % len(SORT_COLUMNS)
+                elif key == '>' or key == '.':
+                    sort_column = (sort_column + 1) % len(SORT_COLUMNS)
+                elif key.upper() == 'R':
+                    sort_reverse = not sort_reverse
 
     except KeyboardInterrupt:
         pass
