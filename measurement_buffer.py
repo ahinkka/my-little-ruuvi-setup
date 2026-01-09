@@ -8,6 +8,7 @@ import threading
 import time
 import traceback
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 
 
 logging.basicConfig(level=logging.INFO)
@@ -68,14 +69,37 @@ async def handle(conn, lock, obj):
         conn.commit()
 
 
-def get_measurements_json(conn, lock):
-    max_age = dt.timedelta(hours=1)
-    cutoff = int(time.time()) - int(max_age.total_seconds())
+def parse_time_params(query_string):
+    params = parse_qs(query_string)
+    now = int(time.time())
+
+    if 'start' in params and 'end' in params:
+        start_str, end_str = params['start'][0], params['end'][0]
+        if not start_str.isdigit() or not end_str.isdigit():
+            raise ValueError('start and end must be positive integers')
+        start_val, end_val = int(start_str), int(end_str)
+        if start_val <= 0 or end_val <= 0:
+            raise ValueError('start and end must be positive integers')
+        return start_val, end_val
+
+    period = params.get('period', ['1h'])[0]
+    if not period.endswith('h') or not period[:-1].isdigit():
+        raise ValueError(f'Invalid period format: {period}')
+    hours = int(period[:-1])
+    if hours < 1 or hours > 24:
+        raise ValueError(f'Period must be 1-24 hours, got: {hours}')
+    delta = dt.timedelta(hours=hours)
+
+    start_time = now - int(delta.total_seconds())
+    return start_time, now
+
+
+def get_measurements_json(conn, lock, start_time, end_time):
     with lock:
         rows = conn.execute('''SELECT recorded_at, sensor, temperature, humidity
                                FROM measurement
-                               WHERE recorded_at >= ?
-                               ORDER BY recorded_at ASC''', (cutoff,)).fetchall()
+                               WHERE recorded_at >= ? AND recorded_at <= ?
+                               ORDER BY recorded_at ASC''', (start_time, end_time)).fetchall()
 
     measurements = {}
     for r in rows:
@@ -93,11 +117,17 @@ def get_measurements_json(conn, lock):
 
 class BufferHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == '/measurements.json' or self.path.startswith('/measurements.json?'):
+        parsed = urlparse(self.path)
+        if parsed.path == '/measurements.json':
+            try:
+                start_time, end_time = parse_time_params(parsed.query)
+            except ValueError as e:
+                self.send_error(400, str(e))
+                return
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            response = get_measurements_json(self.server.conn, self.server.lock)
+            response = get_measurements_json(self.server.conn, self.server.lock, start_time, end_time)
             self.wfile.write(response.encode('utf-8'))
         else:
             self.send_error(404, 'Not Found')

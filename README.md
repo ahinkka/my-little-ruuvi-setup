@@ -43,7 +43,11 @@ overkill for the use case. With SQLite I can keep it simple.
 ### Recent data buffering and access
 
 *measurement_buffer.py* maintains an in-memory buffer of recent temperature and
-humidity measurements for the past hour, accessible via HTTP on port 22223.
+humidity measurements (up to 24 hours), accessible via HTTP on port 22223.
+
+Query parameters for `/measurements.json`:
+- `?period=Nh` — last N hours, where N is 1-24 (default: 1h)
+- `?start=<unix>&end=<unix>` — custom time range
 
 
 ### Data visualization
