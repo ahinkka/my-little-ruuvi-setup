@@ -26,7 +26,7 @@ def create_tables(conn):
 
 
 def cleanup_old_entries(conn):
-    max_age = dt.timedelta(hours=1, minutes=15)
+    max_age = dt.timedelta(hours=24, minutes=15)
     cutoff = int(time.time()) - int(max_age.total_seconds())
     conn.execute('DELETE FROM measurement WHERE recorded_at < ?', (cutoff,))
 
