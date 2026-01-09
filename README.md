@@ -50,6 +50,19 @@ Query parameters for `/measurements.json`:
 - `?start=<unix>&end=<unix>` — custom time range
 
 
+### Summary data collection
+
+*measurement_summary_collector.py* collects hourly and daily statistical
+summaries (minimum, maximum, median, mean) for temperature and humidity. It
+queries *measurement_buffer.py* via HTTP and stores the results in an SQLite
+database (`measurement-summaries.db`).
+
+Tables:
+- `hourly_temperature`, `hourly_humidity` — statistics per sensor per hour
+- `daily_temperature`, `daily_humidity` — statistics per sensor per day
+
+`period_start_at` timestamp indicates when the summarized period begins.
+
 ### Data visualization
 
 Measurements are visualized using a single page application (SPA) served by
@@ -71,9 +84,11 @@ mkdir -p ~/.config/systemd/user/
 systemctl --user enable measurement_collector.service
 systemctl --user enable measurement_browser.service
 systemctl --user enable measurement_buffer.service
+systemctl --user enable measurement_summary_collector.service
 systemctl --user start measurement_collector
 systemctl --user start measurement_browser
 systemctl --user start measurement_buffer
+systemctl --user start measurement_summary_collector
 systemctl --user status
 
 # If you make changes to service files to e.g. enable debug logging, the
@@ -82,11 +97,13 @@ systemctl --user daemon-reload
 systemctl --user restart measurement_collector
 systemctl --user restart measurement_browser
 systemctl --user restart measurement_buffer
+systemctl --user restart measurement_summary_collector
 
 # To access the logs of the services:
 journalctl --user -u measurement_collector
 journalctl --user -u measurement_browser
 journalctl --user -u measurement_buffer
+journalctl --user -u measurement_summary_collector
 ```
 
 
