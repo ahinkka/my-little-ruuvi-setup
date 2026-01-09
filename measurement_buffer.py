@@ -72,18 +72,23 @@ def get_measurements_json(conn, lock):
     max_age = dt.timedelta(hours=1)
     cutoff = int(time.time()) - int(max_age.total_seconds())
     with lock:
-        sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM measurement')))
         rows = conn.execute('''SELECT recorded_at, sensor, temperature, humidity
                                FROM measurement
                                WHERE recorded_at >= ?
                                ORDER BY recorded_at ASC''', (cutoff,)).fetchall()
 
-    measurements = [
-        {'recorded_at': r[0], 'sensor': r[1], 'temperature': r[2], 'humidity': r[3]}
-        for r in rows
-    ]
+    measurements = {}
+    for r in rows:
+        sensor = r[1]
+        if sensor not in measurements:
+            measurements[sensor] = []
+        measurements[sensor].append({
+            'recorded_at': r[0],
+            'temperature': r[2],
+            'humidity': r[3]
+        })
 
-    return json.dumps({'sensors': sensors, 'measurements': measurements})
+    return json.dumps(measurements)
 
 
 class BufferHandler(BaseHTTPRequestHandler):
