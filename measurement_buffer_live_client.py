@@ -99,29 +99,20 @@ def linear_regression_slope(times, values):
 
 def compute_statistics(data, mode):
     """Compute statistics for each sensor."""
-    if not data or 'measurements' not in data or 'sensors' not in data:
+    if not data or not isinstance(data, dict):
         return {}
 
-    measurements = data['measurements']
-    sensors = data['sensors']
     now = time.time()
-
-    # Group measurements by sensor
-    by_sensor = {s: [] for s in sensors}
-    for m in measurements:
-        sensor = m['sensor']
-        if sensor in by_sensor:
-            value = m['temperature'] if mode == 'temperature' else m['humidity']
-            by_sensor[sensor].append({
-                'time': m['recorded_at'],
-                'value': value
-            })
-
     stats = {}
-    for sensor in sensors:
-        sensor_data = by_sensor[sensor]
-        if not sensor_data:
+
+    for sensor, measurements in data.items():
+        if not measurements:
             continue
+
+        sensor_data = []
+        for m in measurements:
+            value = m['temperature'] if mode == 'temperature' else m['humidity']
+            sensor_data.append({'time': m['recorded_at'], 'value': value})
 
         values = [d['value'] for d in sensor_data]
         times = [d['time'] for d in sensor_data]
