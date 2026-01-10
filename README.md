@@ -74,6 +74,34 @@ the summary's period) during query time to have matching timestamps between
 different sensors for the visualization library.  Measurements have an
 accurate timestamp in the database.
 
+HTTP API endpoints on port 8000:
+
+`/measurements.json` — raw measurement data from `measurements.db`
+- `?start=<unix>&end=<unix>&measurementType=<type>` — query parameters
+- Returns minute-granularity data
+
+`/summaries.json` — hourly summary data from `measurement-summaries.db`
+- `?start=<unix>&end=<unix>&measurementType=<temperature|humidity>` — query parameters
+- Returns hourly aggregated median values
+
+Response format (same for both endpoints):
+```json
+{
+  "data": [
+    [1767996000, 1767999600, ...],
+    [21.5, 21.3, ...],
+    [19.2, 19.1, ...]
+  ],
+  "summaries": true,
+  "sensors": ["AABBCCDDEEFF", ...]
+}
+```
+
+- `data[0]` contains timestamps (Unix epoch)
+- `data[1..n]` contain values for each sensor (same order as `sensors` array)
+- `summaries` is `false` for `/measurements.json`, `true` for `/summaries.json`
+- Missing values are `null`
+
 
 ## Installation incantations
 

@@ -17,6 +17,7 @@ ALLOW_LIST = [
     'uPlot.min.css',
     'uPlot.iife.min.js',
     'measurements.json',
+    'summaries.json',
     'sensors.json'
 ]
 
@@ -191,6 +192,62 @@ def json_query(parameters, file):
         ).encode('utf-8'))
 
 
+def result_matrix_from_hourly_summaries(conn, sensors, start, end, measurement_type):
+    timestamps = sorted(list(set([row[0]
+           for row in conn.execute(
+        f'''SELECT period_start_at
+            FROM hourly_{measurement_type}
+            WHERE period_start_at >= ? AND
+            period_start_at < ?''',
+        (start, end))])))
+
+    result = [timestamps]
+
+    sensor_values = {}
+    for sensor in sensors:
+        for row in conn.execute(f'''SELECT period_start_at, median AS value
+                                    FROM hourly_{measurement_type}
+                                    WHERE sensor = ? AND
+                                          period_start_at >= ? AND
+                                          period_start_at < ?
+                                    ORDER BY period_start_at ASC
+                                 ''', (sensor, start, end)):
+            period_start_at, value = row
+            sensor_values[f'{sensor}, {period_start_at}'] = value
+
+    for sensor in sensors:
+        sensor_row = []
+        for ts in timestamps:
+            sensor_row.append(
+                sensor_values.get(f'{sensor}, {ts}', None)
+            )
+        result.append(sensor_row)
+
+    return result
+
+
+def summary_json_query(parameters, file):
+    pd = dict(parameters)
+    start, end = int(pd['start']), int(pd['end'])
+    measurement_type = measurement_type_matcher.match(pd['measurementType']).group(0)
+
+    with contextlib.closing(
+            sqlite3.connect('measurement-summaries.db',
+                            detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
+
+        sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM hourly_temperature')))
+
+        matrix = result_matrix_from_hourly_summaries(conn, sensors, start, end, measurement_type)
+
+        file.write(json.dumps(
+            {
+                'data': matrix,
+                'summaries': True,
+                'sensors': sensors
+            }
+        ).encode('utf-8'))
+
+
 class MeasurementHandler(SimpleHTTPRequestHandler):
     def do_GET(self, *args, **kwargs):
         self.close_connection = True
@@ -207,6 +264,13 @@ class MeasurementHandler(SimpleHTTPRequestHandler):
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
             json_query(parse_qsl(parsed.query), self.wfile)
+            return
+
+        if parsed.path.endswith('summaries.json'):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            summary_json_query(parse_qsl(parsed.query), self.wfile)
             return
 
         return super().do_GET(*args, **kwargs)
