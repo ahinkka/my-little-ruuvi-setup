@@ -255,6 +255,10 @@ class MeasurementHandler(SimpleHTTPRequestHandler):
         eff_path = self.path.replace('..', '')
         parsed = urlparse(eff_path)
 
+        if parsed.path == '/' or parsed.path == '':
+            self.path = '/index.html'
+            return super().do_GET(*args, **kwargs)
+
         path_suffix = parsed.path.split('/')[-1]
         if path_suffix not in ALLOW_LIST:
             return self.send_error(403, message='Path not allowed', explain=None)
