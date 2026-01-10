@@ -271,17 +271,40 @@ const QuickChooser = (props) => {
 
 
 const MeasurementTypeDropdown = (props) => {
-  const { measurementTypeCallback, measurementType } = props
+  const { measurementTypeCallback, measurementType, dataSource } = props
+
+  const allOptions = [
+    { value: 'temperature', label: 'Temperature' },
+    { value: 'humidity', label: 'Humidity' },
+    { value: 'pressure', label: 'Pressure' },
+    { value: 'battery_voltage', label: 'Battery voltage' },
+    { value: 'tx_power', label: 'TX Power' },
+  ]
+
+  const summaryOptions = [
+    { value: 'temperature', label: 'Temperature' },
+    { value: 'humidity', label: 'Humidity' },
+  ]
+
+  const options = dataSource === 'summaries' ? summaryOptions : allOptions
 
   return h('select', { onChange: (e) => {
     const select = e.target
     measurementTypeCallback(select.children[select.selectedIndex].value)
+  }}, options.map(opt =>
+    h('option', { value: opt.value, selected: measurementType == opt.value }, opt.label)
+  ))
+}
+
+
+const DataSourceDropdown = (props) => {
+  const { dataSourceCallback, dataSource } = props
+
+  return h('select', { onChange: (e) => {
+    dataSourceCallback(e.target.value)
   }}, [
-    h('option', { value: 'temperature', selected: measurementType == 'temperature' }, 'Temperature'),
-    h('option', { value: 'humidity', selected: measurementType == 'humidity' }, 'Humidity'),
-    h('option', { value: 'pressure', selected: measurementType == 'pressure' }, 'Pressure'),
-    h('option', { value: 'battery_voltage', selected: measurementType == 'battery_voltage' }, 'Battery voltage'),
-    h('option', { value: 'tx_power', selected: measurementType == 'tx_power' }, 'TX Power'),
+    h('option', { value: 'measurements', selected: dataSource == 'measurements' }, 'Measurements'),
+    h('option', { value: 'summaries', selected: dataSource == 'summaries' }, 'Summaries'),
   ])
 }
 
@@ -292,7 +315,7 @@ const Header = (props) => h('header', {}, [
 
 
 const Nav = (props) => {
-  const { period, periodCallback, measurementType, measurementTypeCallback } = props
+  const { period, periodCallback, measurementType, measurementTypeCallback, dataSource, dataSourceCallback } = props
   const millisInHour = 60 * 60 * 1000
   return h('nav', {}, [
     h('fieldset', {}, [
@@ -309,11 +332,18 @@ const Nav = (props) => {
       h(QuickChooser, { className: '', periodCallback, period: '365d' }),
     ]),
     h('fieldset', {}, [
+      h(DataSourceDropdown, {
+        dataSource,
+        dataSourceCallback
+      })
+    ]),
+    h('fieldset', {}, [
       h(MeasurementTypeDropdown, {
         className: '',
         period,
         measurementType,
-        measurementTypeCallback
+        measurementTypeCallback,
+        dataSource
       })
     ])
   ])
@@ -407,7 +437,7 @@ const ChartWithData = (props) => {
 
 
 const Chart = (props) => {
-  const { start, end, measurementType } = props
+  const { start, end, measurementType, dataSource } = props
   const [sensors, setSensors] = useState({})
   const [data, setData] = useState(null)
 
@@ -424,19 +454,21 @@ const Chart = (props) => {
   useEffect(() => {
     const startEpoch = Math.floor(start.getTime() / 1000)
     const endEpoch = Math.floor(end.getTime() / 1000)
+    const endpoint = dataSource === 'summaries' ? 'summaries.json' : 'measurements.json'
 
-    console.time('fetch measurements.json()')
-    fetch('measurements.json' +
+    console.time(`fetch ${endpoint}()`)
+    fetch(endpoint +
           `?start=${startEpoch}` +
           `&end=${endEpoch}` +
           `&measurementType=${measurementType}`)
       .then((response) => response.json())
       .then((data) => {
-	console.timeEnd('fetch measurements.json()')
+	console.timeEnd(`fetch ${endpoint}()`)
 	data.measurementType = measurementType
+	data.summaries = false  // TODO: enable summaries rendering later
 	setData(data)
       })
-  }, [start, end, measurementType])
+  }, [start, end, measurementType, dataSource])
 
   return h('div', {}, [
     h(ChartWithData, { data, sensors }),
@@ -457,6 +489,9 @@ const App = (props) => {
   const [measurementType, setMeasurementType] = useState(
     parsedHash.measurementType !== undefined ? parsedHash.measurementType : 'temperature')
 
+  const [dataSource, setDataSource] = useState(
+    parsedHash.dataSource !== undefined ? parsedHash.dataSource : 'measurements')
+
   // useEffect(() => {
   //   if (start && end && measurementType) {
   //     updateHash({ start: start.getTime(), end: end.getTime(), measurementType})
@@ -465,9 +500,16 @@ const App = (props) => {
 
   useEffect(() => {
     if (period) {
-      updateHash({ period, measurementType })
+      updateHash({ period, measurementType, dataSource })
     }
-  }, [period, measurementType])
+  }, [period, measurementType, dataSource])
+
+  // Reset measurement type if switching to summaries and current type is not supported
+  useEffect(() => {
+    if (dataSource === 'summaries' && measurementType !== 'temperature' && measurementType !== 'humidity') {
+      setMeasurementType('temperature')
+    }
+  }, [dataSource])
 
   const now = new Date()
   return h('div', null, [
@@ -482,12 +524,15 @@ const App = (props) => {
       period,
       periodCallback: (period) => {
         setPeriod(period)
-      }
+      },
+      dataSource,
+      dataSourceCallback: setDataSource
     }),
     h(Chart, {
       start: new Date(now - periodToMillis(period)),
       end: now,
-      measurementType
+      measurementType,
+      dataSource
     }),
   ])
 }
