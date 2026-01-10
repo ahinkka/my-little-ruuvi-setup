@@ -51,7 +51,7 @@ def result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
             FROM measurement_{measurement_type}
             WHERE recorded_at >= ? AND
             recorded_at < ?''',
-        (start_dt, end_dt)))])))
+        (start_dt.isoformat(), end_dt.isoformat())))])))
 
     # int(_dt.timestamp())
     result = [[int(_dt.timestamp()) for _dt in dts]]
@@ -64,7 +64,7 @@ def result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
                                           recorded_at >= ? AND
                                           recorded_at < ?
                                     ORDER BY recorded_at ASC
-                                 ''', (sensor, start_dt, end_dt)):
+                                 ''', (sensor, start_dt.isoformat(), end_dt.isoformat())):
             recorded_at, value = row
             recorded_at_dt = round_to_minute(dt.datetime.fromisoformat(recorded_at))
             sensor_values[f'{sensor}, {recorded_at_dt.timestamp()}'] = value
