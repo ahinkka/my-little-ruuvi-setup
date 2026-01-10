@@ -490,7 +490,7 @@ const App = (props) => {
     parsedHash.measurementType !== undefined ? parsedHash.measurementType : 'temperature')
 
   const [dataSource, setDataSource] = useState(
-    parsedHash.dataSource !== undefined ? parsedHash.dataSource : 'measurements')
+    parsedHash.dataSource !== undefined ? parsedHash.dataSource : 'summaries')
 
   // useEffect(() => {
   //   if (start && end && measurementType) {
