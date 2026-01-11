@@ -205,23 +205,27 @@ def result_matrix_from_hourly_summaries(conn, sensors, start, end, measurement_t
 
     sensor_values = {}
     for sensor in sensors:
-        for row in conn.execute(f'''SELECT period_start_at, median AS value
+        for row in conn.execute(f'''SELECT period_start_at, minimum, maximum, median
                                     FROM hourly_{measurement_type}
                                     WHERE sensor = ? AND
                                           period_start_at >= ? AND
                                           period_start_at < ?
                                     ORDER BY period_start_at ASC
                                  ''', (sensor, start, end)):
-            period_start_at, value = row
-            sensor_values[f'{sensor}, {period_start_at}'] = value
+            period_start_at, minimum, maximum, median = row
+            sensor_values[f'{sensor}_min_{period_start_at}'] = minimum
+            sensor_values[f'{sensor}_max_{period_start_at}'] = maximum
+            sensor_values[f'{sensor}_median_{period_start_at}'] = median
 
     for sensor in sensors:
-        sensor_row = []
+        min_row, max_row, median_row = [], [], []
         for ts in timestamps:
-            sensor_row.append(
-                sensor_values.get(f'{sensor}, {ts}', None)
-            )
-        result.append(sensor_row)
+            min_row.append(sensor_values.get(f'{sensor}_min_{ts}', None))
+            max_row.append(sensor_values.get(f'{sensor}_max_{ts}', None))
+            median_row.append(sensor_values.get(f'{sensor}_median_{ts}', None))
+        result.append(min_row)
+        result.append(max_row)
+        result.append(median_row)
 
     return result
 

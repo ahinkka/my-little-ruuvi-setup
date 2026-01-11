@@ -465,7 +465,6 @@ const Chart = (props) => {
       .then((data) => {
 	console.timeEnd(`fetch ${endpoint}()`)
 	data.measurementType = measurementType
-	data.summaries = false  // TODO: enable summaries rendering later
 	setData(data)
       })
   }, [start, end, measurementType, dataSource])
