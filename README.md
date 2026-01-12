@@ -63,6 +63,22 @@ Tables:
 
 `period_start_at` timestamp indicates when the summarized period begins.
 
+### Historical data extraction
+
+*extract_historical_daily.py* extracts temperature and humidity data from
+database files, aggregates to daily summaries (min, max, median), and outputs
+TSV to stdout. Supports multiple database formats including the output of
+*measurement_summary_collector.py*.
+
+Usage:
+```bash
+python extract_historical_daily.py db1.db db2.db > history-daily-summary.tsv
+```
+
+The output file can be used by *measurement_browser.py* to serve historical
+data that predates the current `measurement-summaries.db`.
+
+
 ### Data visualization
 
 Measurements are visualized using a single page application (SPA) served by
