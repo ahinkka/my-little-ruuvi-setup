@@ -50,6 +50,113 @@ const minMax = (twoDArray, startDim) => {
 }
 
 
+const tooltipPlugin = (opts = {}) => {
+  let tooltip;
+
+  const fmtDate = uPlot.fmtDate("{YYYY}-{MM}-{DD} {HH}:{mm}");
+
+  function init(u) {
+    tooltip = document.createElement("div");
+    tooltip.className = "u-tooltip";
+    tooltip.style.pointerEvents = "none";
+    tooltip.style.position = "absolute";
+    tooltip.style.background = "rgba(255, 255, 255, 0.95)";
+    tooltip.style.border = "2px solid #ccc";
+    tooltip.style.borderRadius = "4px";
+    tooltip.style.padding = "8px";
+    tooltip.style.fontSize = "12px";
+    tooltip.style.fontFamily = "sans-serif";
+    tooltip.style.boxShadow = "0 2px 4px rgba(0,0,0,0.1)";
+    tooltip.style.zIndex = "100";
+    tooltip.style.display = "none";
+    tooltip.style.whiteSpace = "pre";
+    u.over.appendChild(tooltip);
+
+    u.over.addEventListener("mouseleave", () => {
+      tooltip.style.display = "none";
+    });
+
+    u.over.addEventListener("mouseenter", () => {
+      tooltip.style.display = "block";
+    });
+  }
+
+  function setCursor(u) {
+    const { left, top, idx } = u.cursor;
+
+    if (idx == null || left < 0 || top < 0) {
+      tooltip.style.display = "none";
+      return;
+    }
+
+    // Calculate distances for all series
+    const distances = [];
+    for (let i = 1; i < u.series.length; i++) {
+      const s = u.series[i];
+      if (!s.show) continue;
+      const val = u.data[i][idx];
+      if (val == null) continue;
+
+      const yPos = u.valToPos(val, s.scale);
+      const dist = Math.abs(top - yPos);
+      distances.push({ idx: i, dist, val, label: s.label, stroke: s.stroke });
+    }
+
+    // Sort by distance, take top N based on mode
+    distances.sort((a, b) => a.dist - b.dist);
+    const count = opts.summaries ? 3 : 1;
+    const closest = distances.slice(0, count);
+
+    if (closest.length === 0) {
+      tooltip.style.display = "none";
+      return;
+    }
+
+    // Build tooltip content
+    const timestamp = u.data[0][idx];
+    const dateStr = fmtDate(new Date(timestamp * 1000));
+    let lines = [dateStr];
+    for (const c of closest) {
+      const text = `${c.label}: ${c.val.toFixed(2)}`;
+      const isMainSeries = !c.label.startsWith("Low ") && !c.label.startsWith("High ");
+      lines.push(isMainSeries ? `<b>${text}</b>` : text);
+    }
+    tooltip.innerHTML = lines.join("<br>");
+    tooltip.style.borderColor = closest[0].stroke;
+
+    // Position tooltip near cursor but keep it on screen
+    const plotWidth = u.over.clientWidth;
+    const plotHeight = u.over.clientHeight;
+    const tooltipWidth = tooltip.offsetWidth;
+    const tooltipHeight = tooltip.offsetHeight;
+
+    let tooltipLeft = left + 15;
+    let tooltipTop = top + 15;
+
+    // Flip to left side if tooltip would go off right edge
+    if (tooltipLeft + tooltipWidth > plotWidth) {
+      tooltipLeft = left - tooltipWidth - 15;
+    }
+
+    // Flip to above if tooltip would go off bottom edge
+    if (tooltipTop + tooltipHeight > plotHeight) {
+      tooltipTop = top - tooltipHeight - 15;
+    }
+
+    tooltip.style.left = tooltipLeft + "px";
+    tooltip.style.top = tooltipTop + "px";
+    tooltip.style.display = "block";
+  }
+
+  return {
+    hooks: {
+      init,
+      setCursor,
+    },
+  };
+};
+
+
 // https://www.nature.com/articles/nmeth.1618
 const colors = [
   [0, 0, 0],
@@ -371,6 +478,9 @@ const plot = (element, measurementType, summaries, data, sensorConfig, shouldCle
     axes: [{}, scale],
     scales: scales,
     hooks: hooks,
+    plugins: [
+      tooltipPlugin({ summaries }),
+    ],
   }
 
   // console.log('effData.length', effData.length)
