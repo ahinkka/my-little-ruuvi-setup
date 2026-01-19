@@ -1,7 +1,7 @@
 import { h, render } from 'https://unpkg.com/preact@latest?module';
 import { useState, useEffect, useLayoutEffect, useRef } from 'https://unpkg.com/preact@latest/hooks/dist/hooks.module.js?module';
 
-
+const LIST_HASH_VALUES = 'selectedSensors'
 const serializeHash = (contents) => {
   let keys = Object.keys(contents)
   keys.sort()
@@ -9,7 +9,9 @@ const serializeHash = (contents) => {
   let first = true;
   for (const key of keys) {
     let value = contents[key]
-    if (first) {
+    if (!value) {
+      continue
+    } else if (first) {
       result += `${key}=${value}`
       first = false
     } else {
@@ -24,7 +26,17 @@ const parseHash = (hash) => {
   const result = {}
   for (let part of parts) {
     const [key, value] = part.split('=')
-    result[key] = value
+    if (LIST_HASH_VALUES.includes(key)) {
+      if (value === 'null') {
+	result[key] = null
+      } else if (value === '') {
+	result[key] = []
+      } else {
+	result[key] = value?.split(',') ?? []
+      }
+    } else {
+      result[key] = value
+    }
   }
   return result
 }
@@ -416,13 +428,52 @@ const DataSourceDropdown = (props) => {
 }
 
 
+const SensorSelector = (props) => {
+  const { sensorIdsWithData, sensors, selectedSensors, setSelectedSensors } = props
+  const sensorIds = Object.keys(sensors)
+  const allSensorIds = Array.from(new Set([...sensorIdsWithData, ...sensorIds])).sort()
+
+  if (allSensorIds.length === 0) {
+    return []
+  }
+
+  return allSensorIds.flatMap((sensorId) => {
+    const sensorName = sensors[sensorId]?.name ?? sensorId
+    const checkBoxElementId = `sensor-checkbox-${sensorId}`
+    return [
+      h('label', { 'for': checkBoxElementId }, [sensorName]),
+      h('input', {
+	type: 'checkbox',
+	name: sensorName,
+	id: checkBoxElementId,
+	checked: !selectedSensors || selectedSensors.includes(sensorId),
+	onClick: () => {
+	  if (selectedSensors && selectedSensors.includes(sensorId)) {
+	    setSelectedSensors(selectedSensors.filter((sid) => sid !== sensorId))
+	  } else if (!selectedSensors) {
+	    setSelectedSensors(allSensorIds.filter((sid) => sid !== sensorId))
+	  } else {
+	    setSelectedSensors([...(selectedSensors ?? []), sensorId])
+	  }
+	}
+      })
+    ]
+  })
+}
+
+
 const Header = (props) => h('header', {}, [
   h('h3', { style: { display: 'inline' } }, 'Measurement browser')
 ])
 
 
 const Nav = (props) => {
-  const { period, periodCallback, measurementType, measurementTypeCallback, dataSource, dataSourceCallback } = props
+  const {
+    period, periodCallback,
+    measurementType, measurementTypeCallback,
+    dataSource, dataSourceCallback,
+    sensorIdsWithData, sensors, selectedSensors, setSelectedSensors
+  } = props
   const millisInHour = 60 * 60 * 1000
   return h('nav', {}, [
     h('fieldset', {}, [
@@ -453,6 +504,9 @@ const Nav = (props) => {
         dataSource
       })
     ])
+    // h('fieldset', {}, [
+    //   h(SensorSelector, { sensorIdsWithData, sensors, selectedSensors, setSelectedSensors })
+    // ])
   ])
 }
 
@@ -595,6 +649,11 @@ const useMeasurementsOrSummaries = (props) => {
 const App = (props) => {
   const sensors = useSensors()
   const parsedHash = parseHash(window.location.hash)
+  const [selectedSensors, setSelectedSensors] = useState(
+    Object.keys(parsedHash).includes('selectedSensors')
+      ? parsedHash.selectedSensors
+      : null
+  )
 
   // const [end, setEnd] = useState(parsedHash.end != undefined ? new Date(parseInt(parsedHash.end)) : new Date())
   // const [start, setStart] = useState(
@@ -617,9 +676,9 @@ const App = (props) => {
 
   useEffect(() => {
     if (period) {
-      updateHash({ period, measurementType, dataSource })
+      updateHash({ period, measurementType, dataSource, selectedSensors })
     }
-  }, [period, measurementType, dataSource])
+  }, [period, measurementType, dataSource, selectedSensors])
 
   // Reset measurement type if switching to summaries and current type is not supported
   useEffect(() => {
@@ -628,6 +687,7 @@ const App = (props) => {
     }
   }, [dataSource])
 
+  // TODO: parameterize fetching after we have a proper "all sensors" endpoint
   const measurementOrSummaryData = useMeasurementsOrSummaries({ period, measurementType, dataSource })
 
   return h('div', null, [
@@ -644,7 +704,11 @@ const App = (props) => {
         setPeriod(period)
       },
       dataSource,
-      dataSourceCallback: setDataSource
+      dataSourceCallback: setDataSource,
+      sensorIdsWithData: measurementOrSummaryData?.sensors ?? [],
+      sensors,
+      selectedSensors,
+      setSelectedSensors
     }),
     h(Chart, { data: measurementOrSummaryData, sensors })
   ])
