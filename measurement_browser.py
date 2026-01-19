@@ -386,6 +386,7 @@ class MeasurementHandler(SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             self.wfile.write('Not found')
+            return
 
         if parsed.path.endswith('measurements.json'):
             self.send_response(200)
