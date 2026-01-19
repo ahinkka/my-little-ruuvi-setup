@@ -496,7 +496,7 @@ const plot = (element, measurementType, summaries, data, sensorConfig, shouldCle
 }
 
 
-const ChartWithData = (props) => {
+const Chart = (props) => {
   const { data, sensors } = props
   const [previousMeasurementType, setPreviousMeasurementType] = useState(null)
   const element = useRef(null)
@@ -546,10 +546,8 @@ const ChartWithData = (props) => {
 }
 
 
-const Chart = (props) => {
-  const { start, end, measurementType, dataSource } = props
+const useSensors = () => {
   const [sensors, setSensors] = useState({})
-  const [data, setData] = useState(null)
 
   useEffect(() => {
     console.time('fetch sensors.json()')
@@ -561,7 +559,18 @@ const Chart = (props) => {
       })
   }, [])
 
+  return sensors
+}
+
+
+const useMeasurementsOrSummaries = (props) => {
+  const { period, measurementType, dataSource } = props
+  const [data, setData] = useState(null)
+
   useEffect(() => {
+    const end = new Date()
+    const start = new Date(end - periodToMillis(period))
+
     const startEpoch = Math.floor(start.getTime() / 1000)
     const endEpoch = Math.floor(end.getTime() / 1000)
     const endpoint = dataSource === 'summaries' ? 'summaries.json' : 'measurements.json'
@@ -577,15 +586,14 @@ const Chart = (props) => {
 	data.measurementType = measurementType
 	setData(data)
       })
-  }, [start, end, measurementType, dataSource])
+  }, [period, measurementType, dataSource])
 
-  return h('div', {}, [
-    h(ChartWithData, { data, sensors }),
-  ])
+  return data
 }
 
 
 const App = (props) => {
+  const sensors = useSensors()
   const parsedHash = parseHash(window.location.hash)
 
   // const [end, setEnd] = useState(parsedHash.end != undefined ? new Date(parseInt(parsedHash.end)) : new Date())
@@ -620,7 +628,8 @@ const App = (props) => {
     }
   }, [dataSource])
 
-  const now = new Date()
+  const measurementOrSummaryData = useMeasurementsOrSummaries({ period, measurementType, dataSource })
+
   return h('div', null, [
     h(Header),
     h(Nav, {
@@ -637,12 +646,7 @@ const App = (props) => {
       dataSource,
       dataSourceCallback: setDataSource
     }),
-    h(Chart, {
-      start: new Date(now - periodToMillis(period)),
-      end: now,
-      measurementType,
-      dataSource
-    }),
+    h(Chart, { data: measurementOrSummaryData, sensors })
   ])
 }
 
