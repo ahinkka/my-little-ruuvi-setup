@@ -568,7 +568,7 @@ const Chart = (props) => {
   if (element.current) {
     const boundingRect = element.current.getBoundingClientRect()
     width = Math.floor(boundingRect.width)
-    const maxHeight = (windowHeight - 100)
+    const maxHeight = (windowHeight - 60)
     height = width * 0.75
     if (height > maxHeight) height = maxHeight
   }
