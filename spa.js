@@ -429,34 +429,41 @@ const DataSourceDropdown = (props) => {
 
 
 const SensorSelector = (props) => {
-  const { sensorIdsWithData, sensors, selectedSensors, setSelectedSensors } = props
-  const sensorIds = Object.keys(sensors)
-  const allSensorIds = Array.from(new Set([...sensorIdsWithData, ...sensorIds])).sort()
-
-  if (allSensorIds.length === 0) {
+  const { sensors, selectedSensors, setSelectedSensors } = props
+  if (Object.keys(sensors).length === 0) {
     return []
   }
 
-  return allSensorIds.flatMap((sensorId) => {
-    const sensorName = sensors[sensorId]?.name ?? sensorId
+  return Object.entries(sensors).flatMap(([sensorId, nameObj]) => {
+    const { name } = nameObj
     const checkBoxElementId = `sensor-checkbox-${sensorId}`
     return [
-      h('label', { 'for': checkBoxElementId }, [sensorName]),
       h('input', {
 	type: 'checkbox',
-	name: sensorName,
+	name: name,
 	id: checkBoxElementId,
 	checked: !selectedSensors || selectedSensors.includes(sensorId),
-	onClick: () => {
-	  if (selectedSensors && selectedSensors.includes(sensorId)) {
-	    setSelectedSensors(selectedSensors.filter((sid) => sid !== sensorId))
-	  } else if (!selectedSensors) {
-	    setSelectedSensors(allSensorIds.filter((sid) => sid !== sensorId))
+	onClick: (event) => {
+	  const shiftDown = event.shiftKey
+	  // Shift down toggles one or all (if the one clicked is already selected)
+	  if (shiftDown) {
+	    if (selectedSensors && selectedSensors.length == 1 && selectedSensors[0] === sensorId) {
+	      setSelectedSensors(null)
+	    } else {
+	      setSelectedSensors([sensorId])
+	    }
 	  } else {
-	    setSelectedSensors([...(selectedSensors ?? []), sensorId])
+	    if (selectedSensors && selectedSensors.includes(sensorId)) {
+	      setSelectedSensors(selectedSensors.filter((sid) => sid !== sensorId))
+	    } else if (!selectedSensors) {
+	      setSelectedSensors(Object.keys(sensors).filter((sid) => sid !== sensorId))
+	    } else {
+	      setSelectedSensors([...(selectedSensors ?? []), sensorId])
+	    }
 	  }
 	}
-      })
+      }),
+      h('label', { 'for': checkBoxElementId }, [name])
     ]
   })
 }
@@ -472,11 +479,11 @@ const Nav = (props) => {
     period, periodCallback,
     measurementType, measurementTypeCallback,
     dataSource, dataSourceCallback,
-    sensorIdsWithData, sensors, selectedSensors, setSelectedSensors
+    sensors, selectedSensors, setSelectedSensors
   } = props
   const millisInHour = 60 * 60 * 1000
   return h('nav', {}, [
-    h('fieldset', {}, [
+    h('fieldset', { id: 'period-chooser' }, [
       h('legend', {}, 'Show last'),
       h(QuickChooser, { className: '', periodCallback, period: '1h' }),
       h(QuickChooser, { className: '', periodCallback, period: '6h' }),
@@ -503,10 +510,11 @@ const Nav = (props) => {
         measurementTypeCallback,
         dataSource
       })
+    ]),
+    h('fieldset', { id: 'sensor-selector' }, [
+      h('legend', {}, ['Select sensors']),
+      h(SensorSelector, { sensors, selectedSensors, setSelectedSensors })
     ])
-    // h('fieldset', {}, [
-    //   h(SensorSelector, { sensorIdsWithData, sensors, selectedSensors, setSelectedSensors })
-    // ])
   ])
 }
 
@@ -618,7 +626,7 @@ const useSensors = () => {
 
 
 const useMeasurementsOrSummaries = (props) => {
-  const { period, measurementType, dataSource } = props
+  const { period, measurementType, dataSource, sensors } = props
   const [data, setData] = useState(null)
 
   useEffect(() => {
@@ -628,19 +636,25 @@ const useMeasurementsOrSummaries = (props) => {
     const startEpoch = Math.floor(start.getTime() / 1000)
     const endEpoch = Math.floor(end.getTime() / 1000)
     const endpoint = dataSource === 'summaries' ? 'summaries.json' : 'measurements.json'
+    if (sensors && sensors.length == 0) {
+      console.warn('fetching empty sensors, should generate the data in browser instead of going to server')
+    }
+    const maybeSensorsPart = (sensors && sensors.length != 0) ? `&sensors=${sensors.join(',')}` : ''
 
     console.time(`fetch ${endpoint}()`)
     fetch(endpoint +
           `?start=${startEpoch}` +
           `&end=${endEpoch}` +
-          `&measurementType=${measurementType}`)
+          `&measurementType=${measurementType}` +
+	  maybeSensorsPart
+	 )
       .then((response) => response.json())
       .then((data) => {
 	console.timeEnd(`fetch ${endpoint}()`)
 	data.measurementType = measurementType
 	setData(data)
       })
-  }, [period, measurementType, dataSource])
+  }, [period, measurementType, dataSource, sensors])
 
   return data
 }
@@ -655,11 +669,6 @@ const App = (props) => {
       : null
   )
 
-  // const [end, setEnd] = useState(parsedHash.end != undefined ? new Date(parseInt(parsedHash.end)) : new Date())
-  // const [start, setStart] = useState(
-  //   parsedHash.start !== undefined ?
-  //     new Date(parseInt(parsedHash.start)) : new Date(end.getTime() - 24 * 60 * 60 * 1000))
-
   const [period, setPeriod] = useState(parsedHash.period !== undefined ? parsedHash.period : '24h')
 
   const [measurementType, setMeasurementType] = useState(
@@ -667,12 +676,6 @@ const App = (props) => {
 
   const [dataSource, setDataSource] = useState(
     parsedHash.dataSource !== undefined ? parsedHash.dataSource : 'summaries')
-
-  // useEffect(() => {
-  //   if (start && end && measurementType) {
-  //     updateHash({ start: start.getTime(), end: end.getTime(), measurementType})
-  //   }
-  // }, [start, end, measurementType])
 
   useEffect(() => {
     if (period) {
@@ -687,25 +690,21 @@ const App = (props) => {
     }
   }, [dataSource])
 
-  // TODO: parameterize fetching after we have a proper "all sensors" endpoint
-  const measurementOrSummaryData = useMeasurementsOrSummaries({ period, measurementType, dataSource })
+  const measurementOrSummaryData = useMeasurementsOrSummaries({
+    period, measurementType, dataSource, sensors: selectedSensors
+  })
 
   return h('div', null, [
     h(Header),
     h(Nav, {
       measurementType,
       measurementTypeCallback: setMeasurementType,
-      // timeCallback: (start, end) => {
-      //        setStart(start)
-      //        setEnd(end)
-      // }
       period,
       periodCallback: (period) => {
         setPeriod(period)
       },
       dataSource,
       dataSourceCallback: setDataSource,
-      sensorIdsWithData: measurementOrSummaryData?.sensors ?? [],
       sensors,
       selectedSensors,
       setSelectedSensors

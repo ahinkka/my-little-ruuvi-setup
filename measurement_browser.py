@@ -6,12 +6,14 @@ import re
 import sqlite3
 import time
 import datetime as dt
+import traceback
 
 from http.server import *
 from urllib.parse import urlparse, parse_qsl
 from pathlib import Path
 
 ALLOW_LIST = [
+    'favicon.ico',
     'index.html',
     'style.css',
     'spa.js',
@@ -88,21 +90,6 @@ def lookup_historical_daily_summaries(sensors, start, end, measurement_type):
     return timestamps, sensor_values
 
 
-# https://stackoverflow.com/a/3300514
-def dict_factory(cursor, row):
-    d = {}
-    for idx, col in enumerate(cursor.description):
-        d[col[0]] = row[idx]
-    return d
-
-
-def stringify(v):
-    if v is None:
-        return 'NaN'
-    else:
-        return str(v)
-
-
 def round_to_minute(dt_):
     return dt_.replace(second=0, microsecond=0, minute=dt_.minute, hour=dt_.hour)
 
@@ -115,9 +102,10 @@ def result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
            for dt_ in list(conn.execute(
         f'''SELECT recorded_at
             FROM measurement_{measurement_type}
-            WHERE recorded_at >= ? AND
+            WHERE sensor IN (''' + ",".join(["?"] * len(sensors)) + ''') AND
+            recorded_at >= ? AND
             recorded_at < ?''',
-        (start_dt.isoformat(), end_dt.isoformat())))])))
+        (*sensors, start_dt.isoformat(), end_dt.isoformat())))])))
 
     # int(_dt.timestamp())
     result = [[int(_dt.timestamp()) for _dt in dts]]
@@ -217,43 +205,30 @@ def result_matrix_from_summaries(conn, sensors, start, end, measurement_type, wi
     return result
 
 
-def resolve_window(start, end):
-    period_secs = end - start
-    if period_secs < 86400:
-        return 60
-    elif period_secs < 7 * 86400:
-        return 3600
-    elif period_secs < 32 * 86400:
-        return 10800
-    else:
-        return 86400
-
-
 measurement_type_matcher = re.compile(r'[a-z_]{1,20}')
-def json_query(parameters, file):
+def measurements_json_query(parameters, file):
     pd =  dict(parameters)
     start, end = int(pd['start']), int(pd['end'])
     measurement_type = measurement_type_matcher.match(pd['measurementType']).group(0)
+    sensors_param = pd.get('sensors', None)
 
     with contextlib.closing(
             sqlite3.connect('measurements.db',
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
 
         sensors = sorted(list(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM sensor')))
+        if sensors_param:
+            effective_sensors = sensors_param.split(',')
+        else:
+            effective_sensors = sensors
 
-        window = resolve_window(start, end)
-        summaries = False
-        # if window < 86400:
-        matrix = result_matrix_from_measurements(conn, sensors, start, end, measurement_type)
-        # else:
-        #     matrix = result_matrix_from_summaries(conn, sensors, start, end, measurement_type, window)
-        #     summaries = True
+        matrix = result_matrix_from_measurements(conn, effective_sensors, start, end, measurement_type)
 
         file.write(json.dumps(
             {
                 'data': matrix,
-                'summaries': summaries,
-                'sensors': sensors
+                'summaries': False,
+                'sensors': effective_sensors
             }
         ).encode('utf-8'))
 
@@ -296,10 +271,15 @@ def result_matrix_from_hourly_summaries(conn, sensors, start, end, measurement_t
     return result
 
 
-def summary_json_query(parameters, file):
+def find_summary_sensors(conn):
+    return set(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM hourly_temperature'))
+
+
+def summaries_json_query(parameters, file):
     pd = dict(parameters)
     start, end = int(pd['start']), int(pd['end'])
     measurement_type = measurement_type_matcher.match(pd['measurementType']).group(0)
+    sensors_param = pd.get('sensors', None)
 
     DAY_SECS = 86400
 
@@ -308,17 +288,21 @@ def summary_json_query(parameters, file):
                             detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
 
         # Get sensors from both DB and historical data
-        db_sensors = set(r[0] for r in conn.execute('SELECT DISTINCT sensor FROM hourly_temperature'))
+        db_sensors = find_summary_sensors(conn)
         all_sensors = sorted(db_sensors | _historical_sensors)
+        if sensors_param:
+            effective_sensors = sensors_param.split(',')
+        else:
+            effective_sensors = all_sensors
 
         # Get data from measurement-summaries.db
-        matrix = result_matrix_from_hourly_summaries(conn, all_sensors, start, end, measurement_type)
+        matrix = result_matrix_from_hourly_summaries(conn, effective_sensors, start, end, measurement_type)
 
         # Find which days are covered by DB data
         db_timestamps = set(matrix[0]) if matrix[0] else set()
 
         # Get historical data for days not in DB
-        hist_timestamps, hist_values = lookup_historical_daily_summaries(all_sensors, start, end, measurement_type)
+        hist_timestamps, hist_values = lookup_historical_daily_summaries(effective_sensors, start, end, measurement_type)
 
         # Filter to only timestamps not already in DB (align to day for comparison)
         db_days = set((ts // DAY_SECS) * DAY_SECS for ts in db_timestamps)
@@ -329,13 +313,13 @@ def summary_json_query(parameters, file):
             all_timestamps = sorted(set(matrix[0]) | set(missing_hist_timestamps))
             new_matrix = [all_timestamps]
 
-            for sensor in all_sensors:
+            for sensor in effective_sensors:
                 min_row, max_row, median_row = [], [], []
                 for ts in all_timestamps:
                     if ts in db_timestamps:
                         # Get from existing matrix
                         old_idx = matrix[0].index(ts)
-                        sensor_idx = all_sensors.index(sensor)
+                        sensor_idx = effective_sensors.index(sensor)
                         base_idx = 1 + sensor_idx * 3
                         min_row.append(matrix[base_idx][old_idx] if base_idx < len(matrix) else None)
                         max_row.append(matrix[base_idx + 1][old_idx] if base_idx + 1 < len(matrix) else None)
@@ -355,9 +339,32 @@ def summary_json_query(parameters, file):
             {
                 'data': matrix,
                 'summaries': True,
-                'sensors': all_sensors
+                'sensors': effective_sensors
             }
         ).encode('utf-8'))
+
+
+def sensors_json_query(parameters, file):
+    with contextlib.closing(
+            sqlite3.connect('measurement-summaries.db',
+                            detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES)) as conn:
+        db_sensor_ids = find_summary_sensors(conn)
+        all_sensor_ids = sorted(db_sensor_ids | _historical_sensors)
+
+    sensors_json = None
+    try:
+        with open('sensors.json', 'r') as f:
+            sensors_json = json.load(f)
+    except:
+        traceback.print_exc()
+        sensors_json = {}
+
+    for sensor_id in all_sensor_ids:
+        if sensor_id in sensors_json:
+            continue
+        sensors_json[sensor_id] = { 'name': sensor_id }
+
+    file.write(json.dumps(sensors_json).encode('utf-8'))
 
 
 class MeasurementHandler(SimpleHTTPRequestHandler):
@@ -375,18 +382,30 @@ class MeasurementHandler(SimpleHTTPRequestHandler):
         if path_suffix not in ALLOW_LIST:
             return self.send_error(403, message='Path not allowed', explain=None)
 
+        if parsed.path.endswith('favicon.ico'):
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write('Not found')
+
         if parsed.path.endswith('measurements.json'):
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            json_query(parse_qsl(parsed.query), self.wfile)
+            measurements_json_query(parse_qsl(parsed.query), self.wfile)
             return
 
         if parsed.path.endswith('summaries.json'):
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
             self.end_headers()
-            summary_json_query(parse_qsl(parsed.query), self.wfile)
+            summaries_json_query(parse_qsl(parsed.query), self.wfile)
+            return
+
+        if parsed.path.endswith('sensors.json'):
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            sensors_json_query(parse_qsl(parsed.query), self.wfile)
             return
 
         return super().do_GET(*args, **kwargs)
